@@ -292,13 +292,14 @@ body {
 }
 
 .version-badge {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 4px 12px;
     border-radius: 10px;
     background: rgba(122, 162, 247, 0.15);
     color: var(--accent);
     border: 1px solid rgba(122, 162, 247, 0.3);
+    line-height: 1.4;
 }
 
 .header-right {
@@ -310,6 +311,12 @@ body {
 .user-info {
     font-size: 13px;
     color: var(--text-secondary);
+}
+
+.btn-logout {
+    min-width: 120px;
+    justify-content: center;
+    text-align: center;
 }
 
 /* ===================================================================
