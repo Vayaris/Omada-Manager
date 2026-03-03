@@ -878,6 +878,14 @@ body {
 }
 
 .version-badge-manager {
+    /* Reset button defaults */
+    margin: 0;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    vertical-align: middle;
+    /* Styles */
     background: rgba(125, 207, 255, 0.15);
     color: var(--info);
     border-color: rgba(125, 207, 255, 0.3);
