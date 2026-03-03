@@ -77,7 +77,7 @@
         }
     };
 
-    let currentLang = localStorage.getItem('omada_lang') || 'fr';
+    let currentLang = localStorage.getItem('omada_lang') || (navigator.language.startsWith('fr') ? 'fr' : 'en');
     let currentTheme = localStorage.getItem('omada_theme') || 'dark';
 
     function applyLang() {

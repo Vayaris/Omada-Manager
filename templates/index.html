@@ -331,7 +331,7 @@
         }
     };
 
-    let currentLang = localStorage.getItem('omada_lang') || 'fr';
+    let currentLang = localStorage.getItem('omada_lang') || (navigator.language.startsWith('fr') ? 'fr' : 'en');
 
     function t(key, ...args) {
         let str = LANG[currentLang][key] || LANG['fr'][key] || key;
