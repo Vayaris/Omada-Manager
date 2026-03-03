@@ -79,7 +79,7 @@ Log in with your **Linux system credentials** (same as SSH). Authentication uses
 
 ---
 
-## 📖 Usage
+## Usage
 
 ### When Omada is NOT installed
 
@@ -182,7 +182,7 @@ journalctl -u omada-web -n 50   # View logs
 
 ---
 
-## 🗑️ Uninstall
+## Uninstall
 
 ```bash
 sudo systemctl stop omada-web
@@ -196,7 +196,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -232,7 +232,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ---
 
-## 📋 Prérequis
+## Prérequis
 
 - **Ubuntu 22.04 LTS** (ou compatible Debian)
 - Accès **root** ou **sudo**
@@ -242,7 +242,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ---
 
-## 🚀 Installation rapide
+## Installation rapide
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh | sudo bash
