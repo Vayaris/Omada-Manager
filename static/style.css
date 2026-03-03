@@ -323,9 +323,26 @@ body {
    Layout
    =================================================================== */
 .container {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+}
+
+@media (min-width: 900px) {
+    .container {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* Full-width cards */
+    #notInstalledBanner,
+    #depsCard,
+    #backupCard,
+    #installCard {
+        grid-column: 1 / -1;
+    }
 }
 
 /* ===================================================================
@@ -335,7 +352,6 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    margin-bottom: 24px;
     overflow: hidden;
     transition: background 0.25s, border-color 0.25s;
 }
@@ -777,6 +793,7 @@ body {
 @media (max-width: 640px) {
     .container {
         padding: 12px;
+        gap: 12px;
     }
 
     .header {
