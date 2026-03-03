@@ -17,7 +17,22 @@
             </svg>
             <h1>Omada Manager</h1>
             <span class="version-badge" id="versionBadge">v...</span>
-            <span class="version-badge version-badge-manager" id="managerBadge" title="Omada Web Manager">mgr v...</span>
+            <div class="manager-badge-wrapper">
+                <button class="version-badge version-badge-manager" id="managerBadge" title="Omada Web Manager" onclick="toggleManagerPopover()">mgr v...</button>
+                <div class="manager-popover" id="managerPopover">
+                    <div class="manager-popover-header">
+                        <span class="manager-popover-title">Omada Web Manager</span>
+                        <span class="manager-version-current" id="managerVersionCurrent">v...</span>
+                    </div>
+                    <div class="manager-popover-status" id="managerUpdateStatus" style="display:none;">
+                        <div class="update-info" id="updateInfo"></div>
+                    </div>
+                    <div class="manager-popover-actions">
+                        <button class="btn btn-sm btn-outline" onclick="checkManagerUpdate()" id="btnCheckUpdate" data-i18n="check_update">Vérifier</button>
+                        <button class="btn btn-sm btn-primary" id="btnDoUpdate" onclick="doManagerUpdate()" style="display:none;" data-i18n="update_manager_btn">Mettre à jour</button>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="header-right">
             <button class="btn btn-sm btn-icon" onclick="toggleLang()" id="langBtn" title="Switch language">
@@ -127,26 +142,6 @@
                 <p class="text-muted backup-path-info" data-i18n="backup_path_info">Chemin natif : /opt/tplink/omada_db_backup</p>
                 <div id="backupList">
                     <p class="text-muted" data-i18n="loading">Chargement...</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Manager Self-Update Section -->
-        <section class="card" id="managerUpdateCard">
-            <div class="card-header">
-                <h2 data-i18n="manager_update">Mise à jour Manager</h2>
-                <button class="btn btn-sm btn-outline" onclick="checkManagerUpdate()" id="btnCheckUpdate" data-i18n="check_update">Vérifier</button>
-            </div>
-            <div class="card-body">
-                <div class="manager-version-display">
-                    <div class="manager-version-row">
-                        <span class="manager-version-label">Omada Web Manager</span>
-                        <span class="manager-version-current" id="managerVersionCurrent">v...</span>
-                    </div>
-                    <div class="manager-update-status" id="managerUpdateStatus" style="display:none;">
-                        <div class="update-info" id="updateInfo"></div>
-                        <button class="btn btn-sm btn-primary" id="btnDoUpdate" onclick="doManagerUpdate()" style="display:none;" data-i18n="update_manager_btn">Mettre à jour le Manager</button>
-                    </div>
                 </div>
             </div>
         </section>
@@ -816,6 +811,20 @@
     // ===================================================================
     let managerUpdateAvailable = false;
     let managerRemoteVersion = null;
+
+    function toggleManagerPopover() {
+        const popover = document.getElementById('managerPopover');
+        popover.classList.toggle('show');
+    }
+
+    // Close popover when clicking outside
+    document.addEventListener('click', (e) => {
+        const wrapper = document.querySelector('.manager-badge-wrapper');
+        const popover = document.getElementById('managerPopover');
+        if (wrapper && popover && !wrapper.contains(e.target)) {
+            popover.classList.remove('show');
+        }
+    });
 
     function loadManagerVersion() {
         fetch('/api/manager-version')

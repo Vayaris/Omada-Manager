@@ -863,11 +863,22 @@ body {
     background: #f7768e;
 }
 
-/* Manager Self-Update */
+/* Manager Self-Update Popover */
+.manager-badge-wrapper {
+    position: relative;
+}
+
 .version-badge-manager {
     background: rgba(125, 207, 255, 0.15);
     color: var(--info);
     border-color: rgba(125, 207, 255, 0.3);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.version-badge-manager:hover {
+    background: rgba(125, 207, 255, 0.25);
+    transform: scale(1.05);
 }
 
 .version-update-available {
@@ -877,44 +888,71 @@ body {
     animation: pulse 2s infinite;
 }
 
-.manager-version-display {
-    padding: 12px 16px;
-    background: var(--bg-primary);
+.manager-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.95);
+    min-width: 260px;
+    background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    transition: background 0.25s, border-color 0.25s;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    padding: 14px;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s, transform 0.15s;
 }
 
-.manager-version-row {
+.manager-popover.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) scale(1);
+}
+
+.manager-popover-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 10px;
 }
 
-.manager-version-label {
-    font-size: 13px;
+.manager-popover-title {
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.manager-version-current {
+.manager-popover .manager-version-current {
     font-size: 13px;
     font-weight: 600;
     color: var(--accent);
 }
 
-.manager-update-status {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
+.manager-popover-status {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.manager-popover-actions {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
+}
+
+.manager-popover-actions .btn {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
 }
 
 .update-info {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
 }
 
