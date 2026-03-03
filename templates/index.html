@@ -18,7 +18,7 @@
             <h1>Omada Manager</h1>
             <span class="version-badge" id="versionBadge">v...</span>
             <div class="manager-badge-wrapper">
-                <button class="version-badge version-badge-manager" id="managerBadge" title="Omada Web Manager" onclick="toggleManagerPopover()">mgr v...</button>
+                <button class="version-badge version-badge-manager" id="managerBadge" title="Omada Web Manager" onclick="toggleManagerPopover()">v...</button>
                 <div class="manager-popover" id="managerPopover">
                     <div class="manager-popover-header">
                         <span class="manager-popover-title">Omada Web Manager</span>
@@ -831,7 +831,7 @@
             .then(r => r.json())
             .then(data => {
                 document.getElementById('managerVersionCurrent').textContent = 'v' + data.version;
-                document.getElementById('managerBadge').textContent = 'mgr v' + data.version;
+                document.getElementById('managerBadge').textContent = 'v' + data.version;
             })
             .catch(() => {});
     }
@@ -857,7 +857,7 @@
                 }
 
                 document.getElementById('managerVersionCurrent').textContent = 'v' + data.local_version;
-                document.getElementById('managerBadge').textContent = 'mgr v' + data.local_version;
+                document.getElementById('managerBadge').textContent = 'v' + data.local_version;
 
                 if (data.update_available) {
                     managerUpdateAvailable = true;
