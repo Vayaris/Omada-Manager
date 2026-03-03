@@ -873,6 +873,8 @@ body {
 /* Manager Self-Update Popover */
 .manager-badge-wrapper {
     position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .version-badge-manager {
