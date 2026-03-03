@@ -1,261 +1,412 @@
-# Omada Web Manager
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white" alt="Linux">
+  <img src="https://img.shields.io/badge/Python-3.10+-green?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/License-Open_Source-orange" alt="License">
+  <img src="https://img.shields.io/badge/Lang-EN_|_FR-purple" alt="Languages">
+</p>
 
-Interface web pour installer, gérer et mettre à jour **TP-Link Omada SDN Controller** sur un serveur Linux.
+<h1 align="center">Omada Web Manager</h1>
 
----
+<p align="center">
+  <strong>A lightweight web panel to install, manage, and update TP-Link Omada SDN Controller on Linux.</strong>
+</p>
 
-## Qu'est-ce que c'est ?
-
-Omada Web Manager est un panneau de contrôle web léger qui permet de :
-
-- **Installer** Omada SDN Controller sur une machine vierge (via upload d'un fichier `.deb`)
-- **Surveiller** l'état du service Omada en temps réel (actif / arrêté / en cours de démarrage)
-- **Contrôler** le service : démarrer, arrêter, redémarrer en un clic
-- **Mettre à jour** le contrôleur en uploadant une nouvelle version `.deb`
-- **Sauvegarder et restaurer** la configuration du contrôleur (backup natif Omada)
-- **Superviser l'espace disque** disponible sur le serveur
-
-L'interface est disponible en **français** et en **anglais**, avec un thème **clair** et **sombre**.
+<p align="center">
+  <a href="#-version-française">🇫🇷 Version française disponible en bas de page</a>
+</p>
 
 ---
 
-## Prérequis
+## ✨ Features
 
-- Un serveur sous **Ubuntu 22.04 LTS** (ou compatible Debian)
-- Un accès **root** ou **sudo**
-- Une connexion internet (pour télécharger les dépendances)
-
-Le script d'installation se charge automatiquement d'installer :
-- **Java 17** (OpenJDK 17 JRE Headless)
-- **MongoDB 7.0**
-- **Python 3** avec pip et venv
+| Feature | Description |
+|---------|-------------|
+| **Install Omada** | Deploy Omada SDN Controller on a fresh machine by uploading a `.deb` file |
+| **Service monitoring** | Real-time status indicator (running / stopped) with auto-refresh |
+| **Service control** | Start, stop, restart with one click |
+| **Firmware update** | Upload a new `.deb` version and update through an interactive terminal |
+| **Backup & restore** | Native Omada backup mechanism (`/opt/tplink/omada_db_backup/`) |
+| **Disk monitoring** | Visual disk usage bar — warns before you run out of space |
+| **Dark / Light theme** | Toggle between themes, saved in browser |
+| **EN / FR** | Full bilingual interface, auto-detects browser language |
 
 ---
 
-## Installation
+## 📋 Requirements
 
-### Méthode rapide (une seule commande)
+- **Ubuntu 22.04 LTS** (or Debian-based)
+- **Root** or **sudo** access
+- Internet connection
+
+> The installer **automatically** handles: **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv)
+
+---
+
+## 🚀 Quick Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh | sudo bash
 ```
 
-C'est tout. Le script :
-1. Vous demande un port (par défaut **30560**)
-2. Installe Java 17 et MongoDB 7.0 s'ils ne sont pas présents
-3. Télécharge les fichiers de l'application depuis GitHub
-4. Crée un environnement Python isolé avec les dépendances
-5. Configure et démarre un service systemd (`omada-web`)
-6. Affiche l'URL d'accès à la fin
+That's it. The script will:
 
-### Méthode manuelle
+1. Ask for a language (`en` / `fr`) and a port (default **30560**)
+2. Install Java 17 + MongoDB 7.0 if missing
+3. Download app files from GitHub into `/opt/omada-web-manager/`
+4. Create a Python venv and install dependencies
+5. Set up and start a `omada-web` systemd service
+6. Display the access URL
+
+### Manual install
 
 ```bash
-# Télécharger le script
 wget https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh
-
-# Vérifier le contenu si souhaité
-cat install_omada_manager.sh
-
-# Exécuter
+cat install_omada_manager.sh   # review first if you want
 sudo bash install_omada_manager.sh
 ```
 
 ---
 
-## Accès à l'interface
+## 🔐 Login
 
-Une fois installé, ouvrez un navigateur et allez sur :
+Open your browser and go to:
+
+```
+http://<SERVER_IP>:30560
+```
+
+Log in with your **Linux system credentials** (same as SSH). Authentication uses PAM.
+
+---
+
+## 📖 Usage
+
+### When Omada is NOT installed
+
+1. The dashboard shows a **"Omada Controller is not installed"** banner
+2. Dependency status (Java, MongoDB) is displayed
+3. Upload an Omada `.deb` file via drag & drop or file picker
+4. Click **"Install Omada"** — an interactive terminal opens in the page
+5. Follow the prompts, the page refreshes automatically when done
+
+> **Where to get the `.deb`?** Download from the [official TP-Link website](https://www.tp-link.com/en/support/download/omada-software-controller/).
+
+### When Omada IS installed
+
+- **Version badge** in the header (e.g. `v6.2.0.12`)
+- **Status indicator**: green = running, red = stopped (auto-refresh every 10s)
+- **Control buttons**: Start / Restart / Stop
+- **Service details**: expandable section with full `systemctl status` output
+
+### Updating Omada
+
+1. Upload the new `.deb` file
+2. Click **"Update"** next to the file
+3. The terminal runs two steps:
+   - `dpkg -r omadac` — uninstalls current version (offers **native backup**)
+   - `dpkg -i <new.deb>` — installs new version (offers **restore from backup**)
+4. You can interact with the terminal (answer yes/no to prompts)
+5. Status turns **green** (success) or **red** (error) when complete
+
+### Backups
+
+Uses Omada's **native backup system** (same as the uninstall script). Stored in `/opt/tplink/omada_db_backup/`.
+
+- **Create** — archives the MongoDB database
+- **Restore** — stops the service, restores data, restarts the service
+- **Delete** — removes a backup to free disk space
+
+### File management
+
+Uploaded `.deb` files are stored in `uploads/`. You can:
+- **Install/Update** using the button next to each file
+- **Delete** files to free disk space
+
+### Disk usage
+
+A usage bar is displayed above the upload zone:
+- **Blue** = normal | **Orange** = >75% | **Red** = >90%
+- Shows used / total / free space
+
+### Language & Theme
+
+- **EN / FR** — click the language button in the header (auto-detects browser language)
+- **Dark / Light** — click the sun/moon icon
+- Preferences are saved in the browser
+
+---
+
+## 🏗️ Architecture
+
+```
+/opt/omada-web-manager/
+├── app.py                     # Flask backend (REST API + WebSocket)
+├── requirements.txt           # Python dependencies
+├── config.txt                 # Port config (generated at install)
+├── start.sh                   # Startup script (generated at install)
+├── venv/                      # Isolated Python environment
+├── uploads/                   # Uploaded .deb files
+├── templates/
+│   ├── login.html             # Login page
+│   └── index.html             # Main dashboard
+└── static/
+    └── style.css              # Styles (dark/light themes)
+```
+
+### Systemd service
+
+```bash
+systemctl status omada-web      # View status
+sudo systemctl restart omada-web # Restart
+sudo systemctl stop omada-web    # Stop
+journalctl -u omada-web -n 50   # View logs
+```
+
+### Port reference
+
+| Port | Used by |
+|------|---------|
+| 30560 (default) | Omada Web Manager |
+| 8088 | Omada Controller (HTTP) |
+| 8043 | Omada Controller (HTTPS) |
+| 8843 | Omada Controller (HTTPS portal) |
+| 29810-29817 | Omada Controller (device comm.) |
+| 27001, 27217 | MongoDB |
+
+### Security
+
+- **PAM authentication** (Linux system accounts)
+- Random session secret (Flask)
+- Filename sanitization on upload
+- Only `.deb` files accepted (max **500 MB**)
+
+---
+
+## 🗑️ Uninstall
+
+```bash
+sudo systemctl stop omada-web
+sudo systemctl disable omada-web
+sudo rm /etc/systemd/system/omada-web.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/omada-web-manager
+```
+
+> This does **not** remove Omada Controller or its data.
+
+---
+
+## 🔧 Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Service won't start | `journalctl -u omada-web -n 30` to check logs |
+| "No space left on device" | Delete old `.deb` files or backups from the web interface |
+| Can't log in | Use **Linux system** credentials (not Omada Controller credentials). Check `systemctl status omada-web` |
+| Omada install fails | Check Java 17 + MongoDB in the Dependencies section. Check disk space |
+
+---
+
+---
+
+<h1 align="center" id="-version-française">🇫🇷 Version Française</h1>
+
+<p align="center">
+  <strong>Interface web légère pour installer, gérer et mettre à jour TP-Link Omada SDN Controller sous Linux.</strong>
+</p>
+
+---
+
+## ✨ Fonctionnalités
+
+| Fonctionnalité | Description |
+|----------------|-------------|
+| **Installer Omada** | Déployer Omada SDN Controller sur une machine vierge en uploadant un fichier `.deb` |
+| **Surveillance du service** | Indicateur de statut en temps réel (actif / arrêté) avec rafraîchissement automatique |
+| **Contrôle du service** | Démarrer, arrêter, redémarrer en un clic |
+| **Mise à jour firmware** | Uploader une nouvelle version `.deb` et mettre à jour via un terminal interactif |
+| **Backup & restauration** | Mécanisme de sauvegarde natif Omada (`/opt/tplink/omada_db_backup/`) |
+| **Surveillance du disque** | Barre visuelle d'utilisation du disque — alerte avant de manquer d'espace |
+| **Thème sombre / clair** | Basculer entre les thèmes, sauvegardé dans le navigateur |
+| **FR / EN** | Interface entièrement bilingue, détecte automatiquement la langue du navigateur |
+
+---
+
+## 📋 Prérequis
+
+- **Ubuntu 22.04 LTS** (ou compatible Debian)
+- Accès **root** ou **sudo**
+- Connexion internet
+
+> L'installateur gère **automatiquement** : **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv)
+
+---
+
+## 🚀 Installation rapide
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh | sudo bash
+```
+
+C'est tout. Le script va :
+
+1. Demander la langue (`en` / `fr`) et le port (par défaut **30560**)
+2. Installer Java 17 + MongoDB 7.0 si absents
+3. Télécharger les fichiers depuis GitHub dans `/opt/omada-web-manager/`
+4. Créer un environnement Python virtuel et installer les dépendances
+5. Configurer et démarrer un service systemd `omada-web`
+6. Afficher l'URL d'accès
+
+### Installation manuelle
+
+```bash
+wget https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh
+cat install_omada_manager.sh   # vérifier le contenu si souhaité
+sudo bash install_omada_manager.sh
+```
+
+---
+
+## 🔐 Connexion
+
+Ouvrez votre navigateur et allez sur :
 
 ```
 http://<IP_DU_SERVEUR>:30560
 ```
 
-Remplacez `<IP_DU_SERVEUR>` par l'adresse IP de votre machine et `30560` par le port choisi lors de l'installation.
-
-### Connexion
-
-Utilisez les **identifiants du système Linux** (le compte utilisateur de la machine). L'authentification se fait via PAM (le même mécanisme que SSH).
+Connectez-vous avec vos **identifiants Linux** (les mêmes que pour SSH). L'authentification utilise PAM.
 
 ---
 
-## Utilisation
+## 📖 Utilisation
 
-### Cas 1 : Omada n'est pas encore installé
+### Quand Omada n'est PAS installé
 
-Lorsque le contrôleur Omada SDN n'est pas détecté sur la machine :
+1. Le tableau de bord affiche un bandeau **"Omada Controller n'est pas installé"**
+2. L'état des dépendances (Java, MongoDB) est affiché
+3. Uploadez un fichier `.deb` Omada par glisser-déposer ou sélection
+4. Cliquez sur **"Installer Omada"** — un terminal interactif s'ouvre dans la page
+5. Suivez les instructions, la page se rafraîchit automatiquement à la fin
 
-1. L'interface affiche un bandeau **"Omada Controller n'est pas installé"**
-2. L'état des dépendances (Java, MongoDB) est affiché pour vérifier qu'elles sont prêtes
-3. La zone d'upload est visible : **glissez-déposez** un fichier `.deb` d'Omada ou cliquez pour le sélectionner
-4. Cliquez sur **"Installer Omada"** à côté du fichier uploadé
-5. Un terminal interactif s'ouvre dans la page : vous voyez l'installation en direct et pouvez répondre aux questions si nécessaire
-6. Une fois terminé, la page se rafraîchit automatiquement et passe au mode normal
+> **Où trouver le `.deb` ?** Téléchargez depuis le [site officiel TP-Link](https://www.tp-link.com/fr/support/download/omada-software-controller/).
 
-> **Où trouver le .deb ?** Téléchargez la dernière version de Omada SDN Controller depuis le [site officiel TP-Link](https://www.tp-link.com/fr/support/download/omada-software-controller/).
+### Quand Omada EST installé
 
-### Cas 2 : Omada est déjà installé
-
-L'interface affiche :
-
-- **Version actuelle** d'Omada (dans le bandeau en haut, ex: `v6.2.0.12`)
-- **État du service** : indicateur vert (actif) / rouge (arrêté) avec rafraîchissement automatique toutes les 10 secondes
-- **Boutons de contrôle** :
-  - **Démarrer** : lance le service s'il est arrêté
-  - **Redémarrer** : relance le service
-  - **Arrêter** : stoppe le service
-- **Détails du service** : section dépliable montrant la sortie complète de `systemctl status`
+- **Badge de version** dans le header (ex: `v6.2.0.12`)
+- **Indicateur de statut** : vert = actif, rouge = arrêté (rafraîchissement auto toutes les 10s)
+- **Boutons de contrôle** : Démarrer / Redémarrer / Arrêter
+- **Détails du service** : section dépliable avec la sortie complète de `systemctl status`
 
 ### Mise à jour d'Omada
 
-1. Uploadez le nouveau fichier `.deb` dans la zone de dépôt
+1. Uploadez le nouveau fichier `.deb`
 2. Cliquez sur **"Mettre à jour"** à côté du fichier
-3. Le processus se déroule en 2 étapes dans le terminal intégré :
-   - **Désinstallation** de l'ancienne version (`dpkg -r omadac`) — le script natif d'Omada vous propose de **sauvegarder la configuration**
-   - **Installation** de la nouvelle version (`dpkg -i`) — le script natif vous propose de **restaurer la configuration** sauvegardée
+3. Le terminal exécute deux étapes :
+   - `dpkg -r omadac` — désinstalle la version actuelle (propose un **backup natif**)
+   - `dpkg -i <nouveau.deb>` — installe la nouvelle version (propose de **restaurer le backup**)
 4. Vous pouvez interagir avec le terminal (répondre yes/no aux questions)
-5. Le statut passe à **"Terminé avec succès"** (vert) ou **"Terminé avec erreurs"** (rouge)
+5. Le statut passe en **vert** (succès) ou **rouge** (erreur) à la fin
 
 ### Sauvegardes
 
-Les sauvegardes utilisent le **mécanisme natif d'Omada** (le même que celui utilisé lors de la désinstallation). Elles sont stockées dans `/opt/tplink/omada_db_backup/`.
+Utilise le **système de backup natif d'Omada** (le même que le script de désinstallation). Stocké dans `/opt/tplink/omada_db_backup/`.
 
-- **Créer un backup** : cliquez sur le bouton "Créer un backup" — archive la base de données MongoDB d'Omada
-- **Restaurer** : cliquez sur "Restaurer" à côté d'une sauvegarde — le service est arrêté, la base restaurée, puis le service est relancé
-- **Supprimer** : cliquez sur "Supprimer" pour libérer de l'espace
+- **Créer** — archive la base de données MongoDB
+- **Restaurer** — arrête le service, restaure les données, relance le service
+- **Supprimer** — supprime une sauvegarde pour libérer de l'espace
 
-### Gestion des fichiers uploadés
+### Gestion des fichiers
 
-Les fichiers `.deb` uploadés sont conservés sur le serveur dans le dossier `uploads/`. Vous pouvez :
-- Les **installer/mettre à jour** en cliquant sur le bouton correspondant
-- Les **supprimer** avec le bouton "Supprimer" à côté de chaque fichier, pour libérer de l'espace disque
+Les fichiers `.deb` uploadés sont conservés dans `uploads/`. Vous pouvez :
+- **Installer/Mettre à jour** via le bouton correspondant
+- **Supprimer** les fichiers pour libérer de l'espace disque
 
 ### Espace disque
 
-Une barre d'utilisation du disque est affichée au-dessus de la zone d'upload. Elle indique :
-- L'espace **utilisé**, **total** et **libre**
-- La barre passe en **orange** au-dessus de 75% d'utilisation et en **rouge** au-dessus de 90%
-
-Cela permet de vérifier qu'il y a assez de place avant d'uploader un fichier `.deb` (souvent 200+ Mo) ou de créer un backup.
+Une barre d'utilisation est affichée au-dessus de la zone d'upload :
+- **Bleu** = normal | **Orange** = >75% | **Rouge** = >90%
+- Affiche l'espace utilisé / total / libre
 
 ### Langue et thème
 
-- **FR / EN** : cliquez sur le bouton de langue dans le bandeau en haut à droite
-- **Clair / Sombre** : cliquez sur l'icône soleil/lune dans le bandeau
+- **FR / EN** — cliquez sur le bouton de langue dans le header (détecte automatiquement la langue du navigateur)
+- **Sombre / Clair** — cliquez sur l'icône soleil/lune
 - Les préférences sont sauvegardées dans le navigateur
 
 ---
 
-## Architecture technique
+## 🏗️ Architecture
 
 ```
-/opt/omada-web-manager/        # Répertoire d'installation (créé par le script)
+/opt/omada-web-manager/
 ├── app.py                     # Backend Flask (API REST + WebSocket)
 ├── requirements.txt           # Dépendances Python
-├── config.txt                 # Port configuré (généré à l'installation)
-├── start.sh                   # Script de démarrage (généré à l'installation)
+├── config.txt                 # Configuration du port (généré à l'install)
+├── start.sh                   # Script de démarrage (généré à l'install)
 ├── venv/                      # Environnement Python isolé
 ├── uploads/                   # Fichiers .deb uploadés
 ├── templates/
 │   ├── login.html             # Page de connexion
-│   └── index.html             # Dashboard principal
+│   └── index.html             # Tableau de bord principal
 └── static/
-    └── style.css              # Styles (thèmes clair/sombre)
+    └── style.css              # Styles (thèmes sombre/clair)
 ```
 
 ### Service systemd
 
-Le service s'appelle `omada-web` et s'exécute en tant que **root** (nécessaire pour `dpkg` et `systemctl`).
-
 ```bash
-# Voir le statut
-systemctl status omada-web
-
-# Redémarrer
-sudo systemctl restart omada-web
-
-# Arrêter
-sudo systemctl stop omada-web
-
-# Voir les logs
-journalctl -u omada-web -n 50
+systemctl status omada-web          # Voir le statut
+sudo systemctl restart omada-web    # Redémarrer
+sudo systemctl stop omada-web       # Arrêter
+journalctl -u omada-web -n 50      # Voir les logs
 ```
 
-### Ports
+### Référence des ports
 
 | Port | Utilisé par |
 |------|-------------|
 | 30560 (défaut) | Omada Web Manager |
 | 8088 | Omada Controller (HTTP) |
 | 8043 | Omada Controller (HTTPS) |
-| 8843 | Omada Controller (HTTPS portal) |
-| 29810-29817 | Omada Controller (communication appareils) |
+| 8843 | Omada Controller (HTTPS portail) |
+| 29810-29817 | Omada Controller (comm. appareils) |
 | 27001, 27217 | MongoDB |
-
-Le port de Omada Web Manager est configurable lors de l'installation. Les ports d'Omada Controller et MongoDB sont réservés et ne peuvent pas être utilisés.
 
 ### Sécurité
 
-- L'authentification utilise **PAM** (les comptes système Linux)
-- Les sessions sont gérées par Flask avec un secret aléatoire
-- Les noms de fichiers uploadés sont nettoyés (sanitization)
-- Seuls les fichiers `.deb` sont acceptés
-- La taille maximale d'upload est de **500 Mo**
+- **Authentification PAM** (comptes système Linux)
+- Secret de session aléatoire (Flask)
+- Nettoyage des noms de fichiers uploadés
+- Seuls les fichiers `.deb` sont acceptés (max **500 Mo**)
 
 ---
 
-## Désinstallation
+## 🗑️ Désinstallation
 
 ```bash
-# Arrêter et désactiver le service
 sudo systemctl stop omada-web
 sudo systemctl disable omada-web
-
-# Supprimer le fichier service
 sudo rm /etc/systemd/system/omada-web.service
 sudo systemctl daemon-reload
-
-# Supprimer les fichiers de l'application
 sudo rm -rf /opt/omada-web-manager
 ```
 
-Cela ne touche **pas** à Omada Controller ni à ses données.
+> Cela ne touche **pas** à Omada Controller ni à ses données.
 
 ---
 
-## Dépannage
+## 🔧 Dépannage
 
-### Le service ne démarre pas
-
-```bash
-# Vérifier les logs
-journalctl -u omada-web -n 30
-
-# Vérifier que Python et le venv sont OK
-/opt/omada-web-manager/venv/bin/python --version
-```
-
-### Erreur "No space left on device"
-
-L'espace disque est insuffisant. Solutions :
-- Supprimer les anciens fichiers `.deb` via l'interface (bouton Supprimer)
-- Supprimer les anciens backups via l'interface
-- Vérifier l'espace avec `df -h /`
-
-### Impossible de se connecter
-
-- Vérifiez que vous utilisez les identifiants **du système Linux** (pas ceux d'Omada Controller)
-- Vérifiez que le service tourne : `systemctl status omada-web`
-- Vérifiez que le port est accessible (pare-feu)
-
-### L'installation d'Omada échoue
-
-- Vérifiez que Java 17 et MongoDB 7.0 sont installés (affichés dans la section Dépendances)
-- Vérifiez l'espace disque disponible (affiché dans la barre d'espace disque)
-- Consultez la sortie du terminal intégré pour les erreurs détaillées
+| Problème | Solution |
+|----------|----------|
+| Le service ne démarre pas | `journalctl -u omada-web -n 30` pour voir les logs |
+| "No space left on device" | Supprimer les anciens `.deb` ou backups depuis l'interface web |
+| Impossible de se connecter | Utiliser les identifiants **Linux** (pas ceux d'Omada Controller). Vérifier `systemctl status omada-web` |
+| L'installation d'Omada échoue | Vérifier Java 17 + MongoDB dans la section Dépendances. Vérifier l'espace disque |
 
 ---
 
-## Licence
-
-Ce projet est open source.
+<p align="center">
+  <strong>Made with purpose. Open source.</strong>
+</p>
