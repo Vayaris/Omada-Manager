@@ -1,0 +1,10 @@
+venv/
+uploads/
+backups/
+__pycache__/
+*.pyc
+config.txt
+.claude/
+*.tar.gz
+start.sh
+omada-web.service
