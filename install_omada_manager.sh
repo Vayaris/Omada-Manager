@@ -300,6 +300,7 @@ download_file "requirements.txt" "${INSTALL_DIR}/requirements.txt"
 download_file "templates/login.html" "${INSTALL_DIR}/templates/login.html"
 download_file "templates/index.html" "${INSTALL_DIR}/templates/index.html"
 download_file "static/style.css" "${INSTALL_DIR}/static/style.css"
+download_file "VERSION" "${INSTALL_DIR}/VERSION"
 
 echo -e "${GREEN}  -> ${MSG_STEP5_OK}${NC}"
 

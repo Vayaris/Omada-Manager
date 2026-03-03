@@ -12,6 +12,10 @@ import fcntl
 import termios
 import subprocess
 import secrets
+import threading
+import tempfile
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 from flask import (
@@ -40,6 +44,19 @@ CLUSTER_FILE_NAME = "cluster.tar.gz"
 
 CONFIG_FILE = os.path.join(BASE_DIR, "config.txt")
 DEFAULT_PORT = 30560
+
+# Self-update configuration
+VERSION_FILE = os.path.join(BASE_DIR, "VERSION")
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/Vayaris/Omada-Manager/main"
+MANAGER_SERVICE_NAME = "omada-web"
+UPDATE_FILES = [
+    ("app.py", "app.py"),
+    ("requirements.txt", "requirements.txt"),
+    ("templates/index.html", "templates/index.html"),
+    ("templates/login.html", "templates/login.html"),
+    ("static/style.css", "static/style.css"),
+    ("VERSION", "VERSION"),
+]
 
 
 def read_port():
@@ -169,6 +186,75 @@ def get_disk_usage():
         return {"total": total, "used": used, "free": free}
     except Exception:
         return {"total": 0, "used": 0, "free": 0}
+
+
+def get_manager_version():
+    """Return the locally installed Omada Web Manager version."""
+    try:
+        with open(VERSION_FILE, "r") as f:
+            return f.read().strip()
+    except (FileNotFoundError, IOError):
+        return "0.0.0"
+
+
+def get_remote_manager_version():
+    """Fetch the latest Omada Web Manager version from GitHub."""
+    url = f"{GITHUB_RAW_BASE}/VERSION"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "OmadaWebManager"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.read().decode("utf-8").strip()
+    except Exception:
+        return None
+
+
+def compare_versions(local, remote):
+    """Compare two semver strings. Returns True if remote > local."""
+    try:
+        local_parts = [int(x) for x in local.split(".")]
+        remote_parts = [int(x) for x in remote.split(".")]
+        return remote_parts > local_parts
+    except (ValueError, AttributeError):
+        return False
+
+
+def perform_self_update():
+    """Download updated files from GitHub and prepare for service restart."""
+    tmp_dir = tempfile.mkdtemp(prefix="omada_update_")
+    try:
+        # Phase 1: Download all files to temp directory
+        for remote_path, local_rel_path in UPDATE_FILES:
+            url = f"{GITHUB_RAW_BASE}/{remote_path}"
+            local_tmp = os.path.join(tmp_dir, local_rel_path)
+            os.makedirs(os.path.dirname(local_tmp) or tmp_dir, exist_ok=True)
+
+            req = urllib.request.Request(url, headers={"User-Agent": "OmadaWebManager"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            with open(local_tmp, "wb") as f:
+                f.write(data)
+
+        # Phase 2: All downloads succeeded — copy to install dir
+        for remote_path, local_rel_path in UPDATE_FILES:
+            src = os.path.join(tmp_dir, local_rel_path)
+            dst = os.path.join(BASE_DIR, local_rel_path)
+            os.makedirs(os.path.dirname(dst) or BASE_DIR, exist_ok=True)
+            shutil.copy2(src, dst)
+
+        # Phase 3: Reinstall pip requirements
+        venv_pip = os.path.join(BASE_DIR, "venv", "bin", "pip")
+        req_file = os.path.join(BASE_DIR, "requirements.txt")
+        if os.path.isfile(venv_pip) and os.path.isfile(req_file):
+            subprocess.run(
+                [venv_pip, "install", "--quiet", "-r", req_file],
+                capture_output=True, timeout=120
+            )
+
+        return {"success": True, "message": "Update downloaded successfully"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def run_service_action(action):
@@ -358,7 +444,8 @@ def api_status():
 @login_required
 def api_version():
     v = get_omada_version()
-    return jsonify({"version": v or "inconnue"})
+    mv = get_manager_version()
+    return jsonify({"version": v or "inconnue", "manager_version": mv})
 
 
 @app.route("/api/omada-installed")
@@ -474,6 +561,49 @@ def api_backup_delete():
         os.remove(filepath)
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Fichier introuvable"}), 404
+
+
+@app.route("/api/manager-version")
+@login_required
+def api_manager_version():
+    return jsonify({"version": get_manager_version()})
+
+
+@app.route("/api/manager-update-check")
+@login_required
+def api_manager_update_check():
+    local = get_manager_version()
+    remote = get_remote_manager_version()
+    if remote is None:
+        return jsonify({"success": False, "message": "Could not reach GitHub"})
+    update_available = compare_versions(local, remote)
+    return jsonify({
+        "success": True,
+        "local_version": local,
+        "remote_version": remote,
+        "update_available": update_available
+    })
+
+
+@app.route("/api/manager-update", methods=["POST"])
+@login_required
+def api_manager_update():
+    result = perform_self_update()
+    if result["success"]:
+        def restart_service():
+            import time
+            time.sleep(2)
+            subprocess.Popen(
+                ["systemctl", "restart", MANAGER_SERVICE_NAME],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        threading.Thread(target=restart_service, daemon=True).start()
+        return jsonify({
+            "success": True,
+            "message": "Update applied. Service restarting..."
+        })
+    return jsonify(result)
 
 
 # ---------------------------------------------------------------------------

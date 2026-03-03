@@ -34,7 +34,7 @@
 
 ## Requirements
 
-- **Ubuntu 22.04 LTS** (or Debian-based)
+- **Ubuntu 22.04 / 24.04 / 25.04** (or Debian-based)
 - **Root** or **sudo** access
 - Internet connection
 
@@ -234,7 +234,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ## Prérequis
 
-- **Ubuntu 22.04 LTS** (ou compatible Debian)
+- **Ubuntu 22.04 / 24.04 / 25.04** (ou compatible Debian)
 - Accès **root** ou **sudo**
 - Connexion internet
 

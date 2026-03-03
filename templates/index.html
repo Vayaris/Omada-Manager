@@ -17,6 +17,7 @@
             </svg>
             <h1>Omada Manager</h1>
             <span class="version-badge" id="versionBadge">v...</span>
+            <span class="version-badge version-badge-manager" id="managerBadge" title="Omada Web Manager">mgr v...</span>
         </div>
         <div class="header-right">
             <button class="btn btn-sm btn-icon" onclick="toggleLang()" id="langBtn" title="Switch language">
@@ -126,6 +127,26 @@
                 <p class="text-muted backup-path-info" data-i18n="backup_path_info">Chemin natif : /opt/tplink/omada_db_backup</p>
                 <div id="backupList">
                     <p class="text-muted" data-i18n="loading">Chargement...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Manager Self-Update Section -->
+        <section class="card" id="managerUpdateCard">
+            <div class="card-header">
+                <h2 data-i18n="manager_update">Mise à jour Manager</h2>
+                <button class="btn btn-sm btn-outline" onclick="checkManagerUpdate()" id="btnCheckUpdate" data-i18n="check_update">Vérifier</button>
+            </div>
+            <div class="card-body">
+                <div class="manager-version-display">
+                    <div class="manager-version-row">
+                        <span class="manager-version-label">Omada Web Manager</span>
+                        <span class="manager-version-current" id="managerVersionCurrent">v...</span>
+                    </div>
+                    <div class="manager-update-status" id="managerUpdateStatus" style="display:none;">
+                        <div class="update-info" id="updateInfo"></div>
+                        <button class="btn btn-sm btn-primary" id="btnDoUpdate" onclick="doManagerUpdate()" style="display:none;" data-i18n="update_manager_btn">Mettre à jour le Manager</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -263,6 +284,18 @@
             disk_usage_detail: "{0} utilisé sur {1} ({2} libre)",
             confirm_delete_file: "Supprimer ce fichier ?\n\n{0}",
             file_deleted: "Fichier supprimé",
+            manager_update: "Mise à jour Manager",
+            check_update: "Vérifier",
+            checking_update: "Vérification...",
+            update_available: "Mise à jour disponible : v{0}",
+            no_update: "Vous êtes à jour",
+            update_manager_btn: "Mettre à jour le Manager",
+            confirm_manager_update: "Mettre à jour Omada Web Manager vers v{0} ?\n\nL'interface sera brièvement indisponible pendant le redémarrage.",
+            updating_manager: "Mise à jour en cours...",
+            manager_update_success: "Mise à jour réussie ! Rechargement...",
+            manager_update_error: "Erreur lors de la mise à jour",
+            manager_update_unreachable: "Impossible de contacter GitHub",
+            manager_restarting: "Redémarrage du service. Rechargement automatique...",
         },
         en: {
             logout: "Logout",
@@ -328,6 +361,18 @@
             disk_usage_detail: "{0} used of {1} ({2} free)",
             confirm_delete_file: "Delete this file?\n\n{0}",
             file_deleted: "File deleted",
+            manager_update: "Manager Update",
+            check_update: "Check",
+            checking_update: "Checking...",
+            update_available: "Update available: v{0}",
+            no_update: "You are up to date",
+            update_manager_btn: "Update Manager",
+            confirm_manager_update: "Update Omada Web Manager to v{0}?\n\nThe interface will be briefly unavailable during restart.",
+            updating_manager: "Updating...",
+            manager_update_success: "Update successful! Reloading...",
+            manager_update_error: "Update error",
+            manager_update_unreachable: "Cannot reach GitHub",
+            manager_restarting: "Service restarting. Auto-reloading...",
         }
     };
 
@@ -767,6 +812,116 @@
     }
 
     // ===================================================================
+    // Manager Self-Update
+    // ===================================================================
+    let managerUpdateAvailable = false;
+    let managerRemoteVersion = null;
+
+    function loadManagerVersion() {
+        fetch('/api/manager-version')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('managerVersionCurrent').textContent = 'v' + data.version;
+                document.getElementById('managerBadge').textContent = 'mgr v' + data.version;
+            })
+            .catch(() => {});
+    }
+
+    function checkManagerUpdate() {
+        const btn = document.getElementById('btnCheckUpdate');
+        btn.disabled = true;
+        btn.textContent = t('checking_update');
+
+        fetch('/api/manager-update-check')
+            .then(r => r.json())
+            .then(data => {
+                const statusDiv = document.getElementById('managerUpdateStatus');
+                const infoDiv = document.getElementById('updateInfo');
+                const updateBtn = document.getElementById('btnDoUpdate');
+                statusDiv.style.display = 'flex';
+
+                if (!data.success) {
+                    infoDiv.textContent = t('manager_update_unreachable');
+                    infoDiv.className = 'update-info update-error';
+                    updateBtn.style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('managerVersionCurrent').textContent = 'v' + data.local_version;
+                document.getElementById('managerBadge').textContent = 'mgr v' + data.local_version;
+
+                if (data.update_available) {
+                    managerUpdateAvailable = true;
+                    managerRemoteVersion = data.remote_version;
+                    infoDiv.textContent = t('update_available', data.remote_version);
+                    infoDiv.className = 'update-info update-available';
+                    updateBtn.style.display = '';
+                    document.getElementById('managerBadge').classList.add('version-update-available');
+                } else {
+                    managerUpdateAvailable = false;
+                    infoDiv.textContent = t('no_update');
+                    infoDiv.className = 'update-info update-current';
+                    updateBtn.style.display = 'none';
+                    document.getElementById('managerBadge').classList.remove('version-update-available');
+                }
+            })
+            .catch(() => {
+                showToast(t('connection_error'), 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = t('check_update');
+            });
+    }
+
+    function doManagerUpdate() {
+        if (!managerUpdateAvailable || !managerRemoteVersion) return;
+        if (!confirm(t('confirm_manager_update', managerRemoteVersion))) return;
+
+        const btn = document.getElementById('btnDoUpdate');
+        btn.disabled = true;
+        showToast(t('updating_manager'), 'info');
+
+        fetch('/api/manager-update', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(t('manager_update_success'), 'success');
+                    document.getElementById('updateInfo').textContent = t('manager_restarting');
+                    document.getElementById('updateInfo').className = 'update-info update-restarting';
+                    btn.style.display = 'none';
+                    waitForRestart();
+                } else {
+                    showToast(data.message || t('manager_update_error'), 'error');
+                    btn.disabled = false;
+                }
+            })
+            .catch(() => {
+                showToast(t('manager_restarting'), 'info');
+                waitForRestart();
+            });
+    }
+
+    function waitForRestart() {
+        let attempts = 0;
+        const poll = setInterval(() => {
+            attempts++;
+            fetch('/api/manager-version')
+                .then(r => r.json())
+                .then(() => {
+                    clearInterval(poll);
+                    window.location.reload();
+                })
+                .catch(() => {
+                    if (attempts >= 30) {
+                        clearInterval(poll);
+                        window.location.reload();
+                    }
+                });
+        }, 2000);
+    }
+
+    // ===================================================================
     // Terminal / Installation
     // ===================================================================
     function initSocket() {
@@ -889,6 +1044,8 @@
         loadUploadedFiles();
         loadBackups();
         loadDiskUsage();
+        loadManagerVersion();
+        checkManagerUpdate();
         initSocket();
 
         statusInterval = setInterval(() => {
