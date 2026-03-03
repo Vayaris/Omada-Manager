@@ -17,7 +17,7 @@
 
 ---
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
@@ -32,7 +32,7 @@
 
 ---
 
-## 📋 Requirements
+## Requirements
 
 - **Ubuntu 22.04 LTS** (or Debian-based)
 - **Root** or **sudo** access
@@ -42,7 +42,7 @@
 
 ---
 
-## 🚀 Quick Install
+## Quick Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh | sudo bash
@@ -67,7 +67,7 @@ sudo bash install_omada_manager.sh
 
 ---
 
-## 🔐 Login
+## Login
 
 Open your browser and go to:
 
@@ -136,7 +136,7 @@ A usage bar is displayed above the upload zone:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 /opt/omada-web-manager/
@@ -217,7 +217,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ---
 
-## ✨ Fonctionnalités
+## Fonctionnalités
 
 | Fonctionnalité | Description |
 |----------------|-------------|
@@ -267,7 +267,7 @@ sudo bash install_omada_manager.sh
 
 ---
 
-## 🔐 Connexion
+## Connexion
 
 Ouvrez votre navigateur et allez sur :
 
@@ -279,7 +279,7 @@ Connectez-vous avec vos **identifiants Linux** (les mêmes que pour SSH). L'auth
 
 ---
 
-## 📖 Utilisation
+## Utilisation
 
 ### Quand Omada n'est PAS installé
 
@@ -336,7 +336,7 @@ Une barre d'utilisation est affichée au-dessus de la zone d'upload :
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 /opt/omada-web-manager/
@@ -382,7 +382,7 @@ journalctl -u omada-web -n 50      # Voir les logs
 
 ---
 
-## 🗑️ Désinstallation
+## Désinstallation
 
 ```bash
 sudo systemctl stop omada-web
@@ -396,7 +396,7 @@ sudo rm -rf /opt/omada-web-manager
 
 ---
 
-## 🔧 Dépannage
+## Dépannage
 
 | Problème | Solution |
 |----------|----------|
