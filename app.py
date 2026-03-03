@@ -11,6 +11,7 @@ import struct
 import fcntl
 import termios
 import subprocess
+import json
 import secrets
 import threading
 import tempfile
@@ -44,6 +45,11 @@ CLUSTER_FILE_NAME = "cluster.tar.gz"
 
 CONFIG_FILE = os.path.join(BASE_DIR, "config.txt")
 DEFAULT_PORT = 30560
+
+# Auto-backup configuration
+AUTO_BACKUP_CONFIG = os.path.join(BASE_DIR, "auto_backup.json")
+AUTO_BACKUP_SCRIPT = os.path.join(BASE_DIR, "auto_backup.sh")
+CRON_COMMENT = "omada-web-manager-auto-backup"
 
 # Self-update configuration
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")
@@ -186,6 +192,62 @@ def get_disk_usage():
         return {"total": total, "used": used, "free": free}
     except Exception:
         return {"total": 0, "used": 0, "free": 0}
+
+
+def get_system_stats():
+    """Return CPU usage, RAM usage, and uptime from /proc."""
+    stats = {"cpu_percent": 0, "ram_total": 0, "ram_used": 0, "ram_percent": 0, "uptime_seconds": 0}
+    # Uptime
+    try:
+        with open("/proc/uptime", "r") as f:
+            stats["uptime_seconds"] = int(float(f.read().split()[0]))
+    except Exception:
+        pass
+    # RAM from /proc/meminfo
+    try:
+        meminfo = {}
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    meminfo[parts[0].rstrip(":")] = int(parts[1]) * 1024  # kB to bytes
+        total = meminfo.get("MemTotal", 0)
+        available = meminfo.get("MemAvailable", 0)
+        used = total - available
+        stats["ram_total"] = total
+        stats["ram_used"] = used
+        stats["ram_percent"] = round((used / total) * 100, 1) if total > 0 else 0
+    except Exception:
+        pass
+    # CPU from /proc/stat (instant snapshot — idle vs total)
+    try:
+        with open("/proc/stat", "r") as f:
+            line = f.readline()
+        parts = line.split()
+        if parts[0] == "cpu":
+            vals = [int(x) for x in parts[1:]]
+            idle = vals[3] + (vals[4] if len(vals) > 4 else 0)  # idle + iowait
+            total = sum(vals)
+            # Store first reading
+            if not hasattr(get_system_stats, "_prev"):
+                get_system_stats._prev = (idle, total)
+                import time
+                time.sleep(0.1)
+                with open("/proc/stat", "r") as f:
+                    line = f.readline()
+                parts = line.split()
+                vals = [int(x) for x in parts[1:]]
+                idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
+                total = sum(vals)
+            prev_idle, prev_total = get_system_stats._prev
+            get_system_stats._prev = (idle, total)
+            diff_idle = idle - prev_idle
+            diff_total = total - prev_total
+            if diff_total > 0:
+                stats["cpu_percent"] = round((1 - diff_idle / diff_total) * 100, 1)
+    except Exception:
+        pass
+    return stats
 
 
 def get_manager_version():
@@ -364,6 +426,68 @@ def list_backups():
     return backups
 
 
+def get_auto_backup_config():
+    """Read auto-backup configuration."""
+    default = {"enabled": False, "interval_days": 7}
+    try:
+        with open(AUTO_BACKUP_CONFIG, "r") as f:
+            cfg = json.load(f)
+            return {
+                "enabled": bool(cfg.get("enabled", False)),
+                "interval_days": int(cfg.get("interval_days", 7))
+            }
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        return default
+
+
+def set_auto_backup_config(enabled, interval_days):
+    """Write auto-backup configuration and update crontab accordingly."""
+    interval_days = max(1, min(interval_days, 90))
+    cfg = {"enabled": enabled, "interval_days": interval_days}
+    with open(AUTO_BACKUP_CONFIG, "w") as f:
+        json.dump(cfg, f)
+
+    # Create the backup shell script
+    script_content = f"""#!/bin/bash
+# Auto-backup script for Omada Web Manager
+cd "{OMADA_DATA_DIR}" 2>/dev/null || exit 1
+mkdir -p "{OMADA_BACKUP_DIR}"
+tar zcf "{DB_FILE_NAME}" db 2>/dev/null
+cp -f "{DB_FILE_NAME}" "{OMADA_BACKUP_DIR}/{DB_FILE_NAME}"
+rm -f "{DB_FILE_NAME}"
+"""
+    with open(AUTO_BACKUP_SCRIPT, "w") as f:
+        f.write(script_content)
+    os.chmod(AUTO_BACKUP_SCRIPT, 0o755)
+
+    # Update crontab
+    try:
+        result = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True, timeout=10
+        )
+        existing = result.stdout if result.returncode == 0 else ""
+
+        # Remove old entry
+        lines = [l for l in existing.splitlines()
+                 if CRON_COMMENT not in l]
+
+        if enabled:
+            cron_line = f"0 3 */{interval_days} * * {AUTO_BACKUP_SCRIPT} # {CRON_COMMENT}"
+            lines.append(cron_line)
+
+        new_crontab = "\n".join(lines) + "\n" if lines else ""
+        proc = subprocess.run(
+            ["crontab", "-"], input=new_crontab,
+            capture_output=True, text=True, timeout=10
+        )
+        if proc.returncode != 0:
+            return {"success": False, "message": proc.stderr}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+    return {"success": True, "enabled": enabled, "interval_days": interval_days}
+
+
 def restore_backup(filename):
     """Restore a native Omada backup (replicates postinst import_mongo_db)."""
     safe_name = secure_filename(filename)
@@ -512,6 +636,12 @@ def api_disk_usage():
     return jsonify(get_disk_usage())
 
 
+@app.route("/api/system-stats")
+@login_required
+def api_system_stats():
+    return jsonify(get_system_stats())
+
+
 @app.route("/api/uploaded-files/delete", methods=["POST"])
 @login_required
 def api_delete_uploaded_file():
@@ -561,6 +691,26 @@ def api_backup_delete():
         os.remove(filepath)
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Fichier introuvable"}), 404
+
+
+@app.route("/api/backup/auto-config")
+@login_required
+def api_auto_backup_config():
+    return jsonify(get_auto_backup_config())
+
+
+@app.route("/api/backup/auto-config", methods=["POST"])
+@login_required
+def api_auto_backup_set():
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON requis"}), 400
+    enabled = request.json.get("enabled", False)
+    interval_days = request.json.get("interval_days", 7)
+    try:
+        interval_days = int(interval_days)
+    except (TypeError, ValueError):
+        interval_days = 7
+    return jsonify(set_auto_backup_config(enabled, interval_days))
 
 
 @app.route("/api/manager-version")

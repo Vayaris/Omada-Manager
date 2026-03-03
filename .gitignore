@@ -7,3 +7,5 @@ config.txt
 *.tar.gz
 start.sh
 omada-web.service
+auto_backup.json
+auto_backup.sh

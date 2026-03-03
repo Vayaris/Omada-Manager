@@ -870,6 +870,169 @@ body {
     background: #f7768e;
 }
 
+/* Auto-Backup */
+.auto-backup-section {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: background 0.25s, border-color 0.25s;
+}
+
+.auto-backup-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.auto-backup-label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.auto-backup-interval {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.auto-backup-interval select {
+    padding: 4px 8px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.auto-backup-time {
+    font-size: 11px;
+    font-style: italic;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--text-muted);
+    border-radius: 20px;
+    transition: 0.3s;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--success);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+
+/* System Monitoring */
+.monitor-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.monitor-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: background 0.25s, border-color 0.25s;
+}
+
+.monitor-label {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 55px;
+    color: var(--text-secondary);
+}
+
+.monitor-bar-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.monitor-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.monitor-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+.monitor-bar-fill.bar-warning {
+    background: var(--warning);
+}
+
+.monitor-bar-fill.bar-critical {
+    background: var(--danger);
+}
+
+.monitor-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 40px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.monitor-uptime {
+    justify-content: space-between;
+}
+
 /* Manager Self-Update Popover */
 .manager-badge-wrapper {
     position: relative;
@@ -878,19 +1041,12 @@ body {
 }
 
 .version-badge-manager {
-    /* Reset button defaults */
-    margin: 0;
-    box-sizing: border-box;
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.4;
-    vertical-align: middle;
-    /* Styles */
     background: rgba(125, 207, 255, 0.15);
     color: var(--info);
     border-color: rgba(125, 207, 255, 0.3);
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
+    user-select: none;
 }
 
 .version-badge-manager:hover {
