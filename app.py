@@ -159,6 +159,18 @@ def check_dependencies():
     }
 
 
+def get_disk_usage():
+    """Return disk usage for the root partition."""
+    try:
+        stat = os.statvfs("/")
+        total = stat.f_frsize * stat.f_blocks
+        free = stat.f_frsize * stat.f_bavail
+        used = total - free
+        return {"total": total, "used": used, "free": free}
+    except Exception:
+        return {"total": 0, "used": 0, "free": 0}
+
+
 def run_service_action(action):
     """Run a systemctl action on the Omada service."""
     if action not in ("start", "stop", "restart"):
@@ -405,6 +417,27 @@ def api_uploaded_files():
                 size = os.path.getsize(fpath)
                 files.append({"name": f, "size": size})
     return jsonify(files)
+
+
+@app.route("/api/disk-usage")
+@login_required
+def api_disk_usage():
+    return jsonify(get_disk_usage())
+
+
+@app.route("/api/uploaded-files/delete", methods=["POST"])
+@login_required
+def api_delete_uploaded_file():
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON requis"}), 400
+    filename = secure_filename(request.json.get("filename", ""))
+    if not filename:
+        return jsonify({"success": False, "message": "Nom de fichier requis"}), 400
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    if os.path.isfile(filepath):
+        os.remove(filepath)
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Fichier introuvable"}), 404
 
 
 @app.route("/api/backup/create", methods=["POST"])

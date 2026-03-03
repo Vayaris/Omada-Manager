@@ -136,6 +136,17 @@
                 <h2 id="installCardTitle" data-i18n="update_omada">Mise à jour Omada</h2>
             </div>
             <div class="card-body">
+                <!-- Disk Usage -->
+                <div class="disk-usage" id="diskUsage">
+                    <div class="disk-usage-header">
+                        <span data-i18n="disk_usage">Espace disque</span>
+                        <span class="disk-usage-text" id="diskUsageText">...</span>
+                    </div>
+                    <div class="disk-usage-bar">
+                        <div class="disk-usage-fill" id="diskUsageFill"></div>
+                    </div>
+                </div>
+
                 <!-- Upload Zone -->
                 <div class="upload-zone" id="uploadZone">
                     <div class="upload-content">
@@ -248,6 +259,10 @@
             dependencies: "Dépendances",
             dep_installed: "Installé",
             dep_missing: "Manquant",
+            disk_usage: "Espace disque",
+            disk_usage_detail: "{0} utilisé sur {1} ({2} libre)",
+            confirm_delete_file: "Supprimer ce fichier ?\n\n{0}",
+            file_deleted: "Fichier supprimé",
         },
         en: {
             logout: "Logout",
@@ -309,6 +324,10 @@
             dependencies: "Dependencies",
             dep_installed: "Installed",
             dep_missing: "Missing",
+            disk_usage: "Disk usage",
+            disk_usage_detail: "{0} used of {1} ({2} free)",
+            confirm_delete_file: "Delete this file?\n\n{0}",
+            file_deleted: "File deleted",
         }
     };
 
@@ -665,6 +684,7 @@
             if (data.success) {
                 showToast(t('uploaded_ok', data.filename), 'success');
                 loadUploadedFiles();
+                loadDiskUsage();
             } else {
                 showToast(data.message, 'error');
             }
@@ -693,11 +713,50 @@
                             <span class="file-name">${f.name}</span>
                             <span class="file-size">${formatSize(f.size)}</span>
                         </div>
-                        <button class="btn btn-sm btn-primary" onclick="startInstall('${f.name}')">
-                            ${omadaInstalled ? t('install_btn') : t('install_omada_btn')}
-                        </button>
+                        <div class="file-actions">
+                            <button class="btn btn-sm btn-primary" onclick="startInstall('${f.name}')">
+                                ${omadaInstalled ? t('install_btn') : t('install_omada_btn')}
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteUploadedFile('${f.name}')">
+                                ${t('delete')}
+                            </button>
+                        </div>
                     </div>
                 `).join('');
+            });
+    }
+
+    function deleteUploadedFile(name) {
+        if (!confirm(t('confirm_delete_file', name))) return;
+
+        fetch('/api/uploaded-files/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: name })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast(t('file_deleted'), 'success');
+                loadUploadedFiles();
+                loadDiskUsage();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(() => showToast(t('connection_error'), 'error'));
+    }
+
+    function loadDiskUsage() {
+        fetch('/api/disk-usage')
+            .then(r => r.json())
+            .then(data => {
+                const pct = data.total > 0 ? Math.round((data.used / data.total) * 100) : 0;
+                const fill = document.getElementById('diskUsageFill');
+                const text = document.getElementById('diskUsageText');
+                fill.style.width = pct + '%';
+                fill.className = 'disk-usage-fill' + (pct > 90 ? ' disk-critical' : pct > 75 ? ' disk-warning' : '');
+                text.textContent = t('disk_usage_detail', formatSize(data.used), formatSize(data.total), formatSize(data.free));
             });
     }
 
@@ -740,6 +799,7 @@
                 refreshStatus();
                 loadBackups();
                 loadUploadedFiles();
+                loadDiskUsage();
             }, 3000);
         });
     }
@@ -828,6 +888,7 @@
         refreshStatus();
         loadUploadedFiles();
         loadBackups();
+        loadDiskUsage();
         initSocket();
 
         statusInterval = setInterval(() => {
