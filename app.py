@@ -21,7 +21,7 @@ from datetime import datetime
 
 from flask import (
     Flask, render_template, request, session, redirect,
-    url_for, jsonify, flash
+    url_for, jsonify, flash, send_file
 )
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
@@ -402,6 +402,11 @@ def create_backup():
                 )
                 os.remove(os.path.join(OMADA_DATA_DIR, CLUSTER_FILE_NAME))
 
+        # Purge old backups if retention is configured
+        cfg = get_auto_backup_config()
+        if cfg.get("retention_days", 0) > 0:
+            purge_old_backups(cfg["retention_days"])
+
         size = os.path.getsize(os.path.join(OMADA_BACKUP_DIR, DB_FILE_NAME))
         return {"success": True, "name": DB_FILE_NAME, "size": size}
     except Exception as e:
@@ -428,33 +433,51 @@ def list_backups():
 
 def get_auto_backup_config():
     """Read auto-backup configuration."""
-    default = {"enabled": False, "interval_days": 7}
+    default = {"enabled": False, "interval_days": 7, "retention_days": 0}
     try:
         with open(AUTO_BACKUP_CONFIG, "r") as f:
             cfg = json.load(f)
             return {
                 "enabled": bool(cfg.get("enabled", False)),
-                "interval_days": int(cfg.get("interval_days", 7))
+                "interval_days": int(cfg.get("interval_days", 7)),
+                "retention_days": int(cfg.get("retention_days", 0))
             }
     except (FileNotFoundError, json.JSONDecodeError, ValueError):
         return default
 
 
-def set_auto_backup_config(enabled, interval_days):
+def purge_old_backups(retention_days):
+    """Delete backup files older than retention_days. 0 means no limit."""
+    if retention_days <= 0 or not os.path.isdir(OMADA_BACKUP_DIR):
+        return
+    import time
+    cutoff = time.time() - retention_days * 86400
+    for f in os.listdir(OMADA_BACKUP_DIR):
+        if f.endswith(".tar.gz"):
+            fpath = os.path.join(OMADA_BACKUP_DIR, f)
+            if os.path.getmtime(fpath) < cutoff:
+                os.remove(fpath)
+
+
+def set_auto_backup_config(enabled, interval_days, retention_days=0):
     """Write auto-backup configuration and update crontab accordingly."""
     interval_days = max(1, min(interval_days, 90))
-    cfg = {"enabled": enabled, "interval_days": interval_days}
+    retention_days = max(0, min(retention_days, 365))
+    cfg = {"enabled": enabled, "interval_days": interval_days, "retention_days": retention_days}
     with open(AUTO_BACKUP_CONFIG, "w") as f:
         json.dump(cfg, f)
 
     # Create the backup shell script
+    retention_line = ""
+    if retention_days > 0:
+        retention_line = f'\nfind "{OMADA_BACKUP_DIR}" -name "*.tar.gz" -mtime +{retention_days} -delete 2>/dev/null'
     script_content = f"""#!/bin/bash
 # Auto-backup script for Omada Web Manager
 cd "{OMADA_DATA_DIR}" 2>/dev/null || exit 1
 mkdir -p "{OMADA_BACKUP_DIR}"
 tar zcf "{DB_FILE_NAME}" db 2>/dev/null
 cp -f "{DB_FILE_NAME}" "{OMADA_BACKUP_DIR}/{DB_FILE_NAME}"
-rm -f "{DB_FILE_NAME}"
+rm -f "{DB_FILE_NAME}"{retention_line}
 """
     with open(AUTO_BACKUP_SCRIPT, "w") as f:
         f.write(script_content)
@@ -693,6 +716,16 @@ def api_backup_delete():
     return jsonify({"success": False, "message": "Fichier introuvable"}), 404
 
 
+@app.route("/api/backup/download/<filename>")
+@login_required
+def api_backup_download(filename):
+    safe_name = secure_filename(filename)
+    filepath = os.path.join(OMADA_BACKUP_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        return jsonify({"success": False, "message": "Fichier introuvable"}), 404
+    return send_file(filepath, as_attachment=True)
+
+
 @app.route("/api/backup/auto-config")
 @login_required
 def api_auto_backup_config():
@@ -706,11 +739,16 @@ def api_auto_backup_set():
         return jsonify({"success": False, "message": "JSON requis"}), 400
     enabled = request.json.get("enabled", False)
     interval_days = request.json.get("interval_days", 7)
+    retention_days = request.json.get("retention_days", 0)
     try:
         interval_days = int(interval_days)
     except (TypeError, ValueError):
         interval_days = 7
-    return jsonify(set_auto_backup_config(enabled, interval_days))
+    try:
+        retention_days = int(retention_days)
+    except (TypeError, ValueError):
+        retention_days = 0
+    return jsonify(set_auto_backup_config(enabled, interval_days, retention_days))
 
 
 @app.route("/api/manager-version")
