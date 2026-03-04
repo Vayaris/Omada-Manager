@@ -51,6 +51,13 @@ AUTO_BACKUP_CONFIG = os.path.join(BASE_DIR, "auto_backup.json")
 AUTO_BACKUP_SCRIPT = os.path.join(BASE_DIR, "auto_backup.sh")
 CRON_COMMENT = "omada-web-manager-auto-backup"
 
+
+def generate_backup_filename():
+    """Generate a timestamped backup filename."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"omada_db_{timestamp}.tar.gz"
+
+
 # Self-update configuration
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/Vayaris/Omada-Manager/main"
@@ -361,41 +368,45 @@ def create_backup():
     """Create a native Omada backup to /opt/tplink/omada_db_backup.
 
     Replicates the logic from omadac.prerm do_backup():
-      cd DATA_DIR && tar zcf omada.db.tar.gz db && cp to BACKUP_DIR
+      cd DATA_DIR && tar zcf <timestamped>.tar.gz db && cp to BACKUP_DIR
     """
     db_dir = os.path.join(OMADA_DATA_DIR, "db")
     if not os.path.isdir(db_dir):
         return {"success": False, "message": "Omada data/db directory not found"}
 
     os.makedirs(OMADA_BACKUP_DIR, exist_ok=True)
+    db_filename = generate_backup_filename()
 
     try:
-        # tar zcf omada.db.tar.gz db (from DATA_DIR)
+        # tar zcf omada_db_YYYYMMDD_HHMMSS.tar.gz db (from DATA_DIR)
+        # --warning=no-file-changed: MongoDB writes to db/diagnostic.data
+        # continuously; exit code 1 means "files changed" but archive is valid
         result = subprocess.run(
-            ["tar", "zcf", DB_FILE_NAME, "db"],
+            ["tar", "zcf", db_filename, "--warning=no-file-changed", "db"],
             capture_output=True, text=True, timeout=300,
             cwd=OMADA_DATA_DIR
         )
-        if result.returncode != 0:
+        if result.returncode not in (0, 1):
             return {"success": False, "message": result.stderr}
 
         # cp -f to backup dir
         shutil.copy2(
-            os.path.join(OMADA_DATA_DIR, DB_FILE_NAME),
-            os.path.join(OMADA_BACKUP_DIR, DB_FILE_NAME)
+            os.path.join(OMADA_DATA_DIR, db_filename),
+            os.path.join(OMADA_BACKUP_DIR, db_filename)
         )
-        os.remove(os.path.join(OMADA_DATA_DIR, DB_FILE_NAME))
+        os.remove(os.path.join(OMADA_DATA_DIR, db_filename))
 
         # Also backup cluster if it exists (same as prerm)
         cluster_hs = os.path.join(OMADA_DATA_DIR, "cluster", "hsConfig")
         cluster_ha = os.path.join(OMADA_DATA_DIR, "cluster", "haPersistentConfig")
         if os.path.exists(cluster_hs) or os.path.exists(cluster_ha):
             result2 = subprocess.run(
-                ["tar", "zcf", CLUSTER_FILE_NAME, "cluster"],
+                ["tar", "zcf", CLUSTER_FILE_NAME,
+                 "--warning=no-file-changed", "cluster"],
                 capture_output=True, text=True, timeout=300,
                 cwd=OMADA_DATA_DIR
             )
-            if result2.returncode == 0:
+            if result2.returncode in (0, 1):
                 shutil.copy2(
                     os.path.join(OMADA_DATA_DIR, CLUSTER_FILE_NAME),
                     os.path.join(OMADA_BACKUP_DIR, CLUSTER_FILE_NAME)
@@ -404,11 +415,11 @@ def create_backup():
 
         # Purge old backups if retention is configured
         cfg = get_auto_backup_config()
-        if cfg.get("retention_days", 0) > 0:
-            purge_old_backups(cfg["retention_days"])
+        if cfg.get("max_backups", 0) > 0:
+            purge_old_backups(cfg["max_backups"])
 
-        size = os.path.getsize(os.path.join(OMADA_BACKUP_DIR, DB_FILE_NAME))
-        return {"success": True, "name": DB_FILE_NAME, "size": size}
+        size = os.path.getsize(os.path.join(OMADA_BACKUP_DIR, db_filename))
+        return {"success": True, "name": db_filename, "size": size}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
@@ -433,51 +444,60 @@ def list_backups():
 
 def get_auto_backup_config():
     """Read auto-backup configuration."""
-    default = {"enabled": False, "interval_days": 7, "retention_days": 0}
+    default = {"enabled": False, "interval_days": 7, "max_backups": 0}
     try:
         with open(AUTO_BACKUP_CONFIG, "r") as f:
             cfg = json.load(f)
             return {
                 "enabled": bool(cfg.get("enabled", False)),
                 "interval_days": int(cfg.get("interval_days", 7)),
-                "retention_days": int(cfg.get("retention_days", 0))
+                "max_backups": int(cfg.get("max_backups",
+                                           cfg.get("retention_days", 0)))
             }
     except (FileNotFoundError, json.JSONDecodeError, ValueError):
         return default
 
 
-def purge_old_backups(retention_days):
-    """Delete backup files older than retention_days. 0 means no limit."""
-    if retention_days <= 0 or not os.path.isdir(OMADA_BACKUP_DIR):
+def purge_old_backups(max_backups):
+    """Keep only the N most recent backup files. 0 means no limit."""
+    if max_backups <= 0 or not os.path.isdir(OMADA_BACKUP_DIR):
         return
-    import time
-    cutoff = time.time() - retention_days * 86400
+    backups = []
     for f in os.listdir(OMADA_BACKUP_DIR):
-        if f.endswith(".tar.gz"):
+        if f.endswith(".tar.gz") and f != CLUSTER_FILE_NAME:
             fpath = os.path.join(OMADA_BACKUP_DIR, f)
-            if os.path.getmtime(fpath) < cutoff:
-                os.remove(fpath)
+            backups.append((fpath, os.path.getmtime(fpath)))
+    # Sort newest first, delete everything beyond max_backups
+    backups.sort(key=lambda x: x[1], reverse=True)
+    for fpath, _ in backups[max_backups:]:
+        os.remove(fpath)
 
 
-def set_auto_backup_config(enabled, interval_days, retention_days=0):
+def set_auto_backup_config(enabled, interval_days, max_backups=0):
     """Write auto-backup configuration and update crontab accordingly."""
     interval_days = max(1, min(interval_days, 90))
-    retention_days = max(0, min(retention_days, 365))
-    cfg = {"enabled": enabled, "interval_days": interval_days, "retention_days": retention_days}
+    max_backups = max(0, min(max_backups, 100))
+    cfg = {"enabled": enabled, "interval_days": interval_days, "max_backups": max_backups}
     with open(AUTO_BACKUP_CONFIG, "w") as f:
         json.dump(cfg, f)
 
-    # Create the backup shell script
+    # Create the backup shell script with timestamped filenames
     retention_line = ""
-    if retention_days > 0:
-        retention_line = f'\nfind "{OMADA_BACKUP_DIR}" -name "*.tar.gz" -mtime +{retention_days} -delete 2>/dev/null'
+    if max_backups > 0:
+        retention_line = f"""
+# Retention: keep only the {max_backups} most recent backups
+cd "{OMADA_BACKUP_DIR}"
+ls -1t *.tar.gz 2>/dev/null | grep -v '^cluster\\.tar\\.gz$' | tail -n +{max_backups + 1} | while read f; do rm -f "$f"; done"""
+
     script_content = f"""#!/bin/bash
 # Auto-backup script for Omada Web Manager
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="omada_db_${{TIMESTAMP}}.tar.gz"
 cd "{OMADA_DATA_DIR}" 2>/dev/null || exit 1
 mkdir -p "{OMADA_BACKUP_DIR}"
-tar zcf "{DB_FILE_NAME}" db 2>/dev/null
-cp -f "{DB_FILE_NAME}" "{OMADA_BACKUP_DIR}/{DB_FILE_NAME}"
-rm -f "{DB_FILE_NAME}"{retention_line}
+tar zcf "$BACKUP_FILE" --warning=no-file-changed db 2>/dev/null
+cp -f "$BACKUP_FILE" "{OMADA_BACKUP_DIR}/$BACKUP_FILE"
+rm -f "$BACKUP_FILE"{retention_line}
 """
     with open(AUTO_BACKUP_SCRIPT, "w") as f:
         f.write(script_content)
@@ -522,8 +542,8 @@ def restore_backup(filename):
         subprocess.run(["systemctl", "stop", SERVICE_NAME],
                        capture_output=True, timeout=60)
 
-        # If restoring db backup, clear existing db first
-        if safe_name == DB_FILE_NAME:
+        # If restoring db backup (not cluster), clear existing db first
+        if safe_name != CLUSTER_FILE_NAME:
             db_dir = os.path.join(OMADA_DATA_DIR, "db")
             if os.path.isdir(db_dir):
                 shutil.rmtree(db_dir)
@@ -739,16 +759,16 @@ def api_auto_backup_set():
         return jsonify({"success": False, "message": "JSON requis"}), 400
     enabled = request.json.get("enabled", False)
     interval_days = request.json.get("interval_days", 7)
-    retention_days = request.json.get("retention_days", 0)
+    max_backups = request.json.get("max_backups", 0)
     try:
         interval_days = int(interval_days)
     except (TypeError, ValueError):
         interval_days = 7
     try:
-        retention_days = int(retention_days)
+        max_backups = int(max_backups)
     except (TypeError, ValueError):
-        retention_days = 0
-    return jsonify(set_auto_backup_config(enabled, interval_days, retention_days))
+        max_backups = 0
+    return jsonify(set_auto_backup_config(enabled, interval_days, max_backups))
 
 
 @app.route("/api/manager-version")

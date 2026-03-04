@@ -338,7 +338,9 @@ body {
 
     /* Full-width cards */
     #notInstalledBanner,
-    #depsCard {
+    #depsCard,
+    #backupCard,
+    #installCard {
         grid-column: 1 / -1;
     }
 }

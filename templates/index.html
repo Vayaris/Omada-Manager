@@ -195,16 +195,16 @@
                         <span class="auto-backup-time text-muted" data-i18n="auto_backup_time">(à 3h du matin)</span>
                     </div>
                     <div class="auto-backup-interval" id="autoBackupRetention" style="display:none;">
-                        <span data-i18n="retention">Rétention</span>
-                        <select id="retentionDays" onchange="updateAutoBackupInterval()">
+                        <span data-i18n="retention">Rétention : max</span>
+                        <select id="maxBackups" onchange="updateAutoBackupInterval()">
                             <option value="0" data-i18n-option="retention_unlimited">Illimitée</option>
-                            <option value="7">7</option>
-                            <option value="14">14</option>
-                            <option value="30" selected>30</option>
-                            <option value="60">60</option>
-                            <option value="90">90</option>
+                            <option value="3">3</option>
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
                         </select>
-                        <span id="retentionDaysLabel" data-i18n="days">jours</span>
+                        <span id="maxBackupsLabel" data-i18n="backups_unit">sauvegardes</span>
                     </div>
                 </div>
                 <div id="backupList">
@@ -368,8 +368,9 @@
             auto_backup_disabled: "Backup automatique désactivé",
             auto_backup_updated: "Backup automatique : tous les {0} jours",
             download: "Télécharger",
-            retention: "Rétention",
+            retention: "Rétention : max",
             retention_unlimited: "Illimitée",
+            backups_unit: "sauvegardes",
         },
         en: {
             logout: "Logout",
@@ -457,8 +458,9 @@
             auto_backup_disabled: "Auto backup disabled",
             auto_backup_updated: "Auto backup: every {0} days",
             download: "Download",
-            retention: "Retention",
+            retention: "Retention: max",
             retention_unlimited: "Unlimited",
+            backups_unit: "backups",
         }
     };
 
@@ -475,6 +477,11 @@
             const key = el.getAttribute('data-i18n');
             const translation = LANG[currentLang][key];
             if (translation) el.innerHTML = translation;
+        });
+        document.querySelectorAll('[data-i18n-option]').forEach(el => {
+            const key = el.getAttribute('data-i18n-option');
+            const translation = LANG[currentLang][key];
+            if (translation) el.textContent = translation;
         });
         document.getElementById('langLabel').textContent = currentLang === 'fr' ? 'EN' : 'FR';
         localStorage.setItem('omada_lang', currentLang);
@@ -769,26 +776,26 @@
                 const intervalDiv = document.getElementById('autoBackupInterval');
                 const retentionDiv = document.getElementById('autoBackupRetention');
                 const select = document.getElementById('autoBackupDays');
-                const retentionSelect = document.getElementById('retentionDays');
+                const maxBackupsSelect = document.getElementById('maxBackups');
                 toggle.checked = data.enabled;
                 intervalDiv.style.display = data.enabled ? 'flex' : 'none';
                 retentionDiv.style.display = data.enabled ? 'flex' : 'none';
                 select.value = data.interval_days;
-                retentionSelect.value = data.retention_days || 0;
+                maxBackupsSelect.value = data.max_backups || 0;
                 updateRetentionLabel();
             })
             .catch(() => {});
     }
 
     function updateRetentionLabel() {
-        const val = document.getElementById('retentionDays').value;
-        document.getElementById('retentionDaysLabel').style.display = val === '0' ? 'none' : '';
+        const val = document.getElementById('maxBackups').value;
+        document.getElementById('maxBackupsLabel').style.display = val === '0' ? 'none' : '';
     }
 
     function toggleAutoBackup() {
         const enabled = document.getElementById('autoBackupToggle').checked;
         const days = parseInt(document.getElementById('autoBackupDays').value);
-        const retention = parseInt(document.getElementById('retentionDays').value);
+        const maxBackups = parseInt(document.getElementById('maxBackups').value);
         const intervalDiv = document.getElementById('autoBackupInterval');
         const retentionDiv = document.getElementById('autoBackupRetention');
         intervalDiv.style.display = enabled ? 'flex' : 'none';
@@ -797,7 +804,7 @@
         fetch('/api/backup/auto-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: enabled, interval_days: days, retention_days: retention })
+            body: JSON.stringify({ enabled: enabled, interval_days: days, max_backups: maxBackups })
         })
         .then(r => r.json())
         .then(data => {
@@ -814,13 +821,13 @@
         const enabled = document.getElementById('autoBackupToggle').checked;
         if (!enabled) return;
         const days = parseInt(document.getElementById('autoBackupDays').value);
-        const retention = parseInt(document.getElementById('retentionDays').value);
+        const maxBackups = parseInt(document.getElementById('maxBackups').value);
         updateRetentionLabel();
 
         fetch('/api/backup/auto-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: true, interval_days: days, retention_days: retention })
+            body: JSON.stringify({ enabled: true, interval_days: days, max_backups: maxBackups })
         })
         .then(r => r.json())
         .then(data => {
