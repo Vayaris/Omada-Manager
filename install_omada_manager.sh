@@ -3,7 +3,7 @@
 # Omada Web Manager - Standalone installation script
 # ===================================================================
 # Downloads and installs Omada Web Manager from GitHub.
-# Checks and installs dependencies (Java 17, MongoDB 7.0).
+# Checks and installs dependencies (Java 17, MongoDB 7.0, JSVC).
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/install_omada_manager.sh | sudo bash
@@ -75,8 +75,8 @@ if [ "$L" = "fr" ]; then
     MSG_PORT_CONTINUE="Continuer quand même ? [o/N]"
     MSG_CANCELLED="Installation annulée."
     MSG_PORT_OK="Port sélectionné"
-    MSG_STEP1="Installation des dépendances système..."
-    MSG_STEP1_OK="Dépendances système installées."
+    MSG_STEP1="Mise à jour du système et installation des dépendances..."
+    MSG_STEP1_OK="Système à jour et dépendances installées."
     MSG_STEP2="Vérification de Java 17..."
     MSG_JAVA_OK="Java déjà installé"
     MSG_JAVA_OLD="Java {0} trouvé, mais Java 17+ requis. Installation..."
@@ -123,8 +123,8 @@ else
     MSG_PORT_CONTINUE="Continue anyway? [y/N]"
     MSG_CANCELLED="Installation cancelled."
     MSG_PORT_OK="Selected port"
-    MSG_STEP1="Installing system dependencies..."
-    MSG_STEP1_OK="System dependencies installed."
+    MSG_STEP1="Updating system and installing dependencies..."
+    MSG_STEP1_OK="System updated and dependencies installed."
     MSG_STEP2="Checking Java 17..."
     MSG_JAVA_OK="Java already installed"
     MSG_JAVA_OLD="Java {0} found, but Java 17+ required. Installing..."
@@ -218,11 +218,12 @@ echo -e "${GREEN}  -> ${MSG_PORT_OK} : ${PORT}${NC}"
 echo ""
 
 # -------------------------------------------------------------------
-# Step 1/10: System dependencies (Python)
+# Step 1/10: System dependencies
 # -------------------------------------------------------------------
 echo -e "${YELLOW}[1/10] ${MSG_STEP1}${NC}"
-apt update -qq
-apt install -y python3-pip python3-venv curl gnupg > /dev/null 2>&1
+apt-get update -qq
+apt-get upgrade -y > /dev/null 2>&1
+apt-get install -y python3-pip python3-venv curl gnupg jsvc > /dev/null 2>&1
 echo -e "${GREEN}  -> ${MSG_STEP1_OK}${NC}"
 
 # -------------------------------------------------------------------
