@@ -148,7 +148,7 @@ def is_omada_installed():
 
 
 def check_dependencies():
-    """Check if Java 17+ and MongoDB are installed."""
+    """Check if Java 17+, MongoDB and JSVC are installed."""
     java_ok = False
     java_version = None
     try:
@@ -183,9 +183,29 @@ def check_dependencies():
     except Exception:
         pass
 
+    jsvc_ok = False
+    jsvc_version = None
+    try:
+        result = subprocess.run(
+            ["dpkg", "-l", "jsvc"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("ii"):
+                jsvc_ok = True
+                parts = line.split()
+                if len(parts) >= 3:
+                    jsvc_version = f"jsvc {parts[2]}"
+                else:
+                    jsvc_version = "jsvc (Apache Commons Daemon)"
+                break
+    except Exception:
+        pass
+
     return {
         "java": {"installed": java_ok, "version": java_version},
-        "mongodb": {"installed": mongo_ok, "version": mongo_version}
+        "mongodb": {"installed": mongo_ok, "version": mongo_version},
+        "jsvc": {"installed": jsvc_ok, "version": jsvc_version}
     }
 
 
@@ -883,7 +903,11 @@ def handle_start_install(data):
         return
 
     sid = request.sid
-    command = f'dpkg -r omadac && dpkg -i "{filepath}"'
+    # Ensure jsvc is installed (required dependency for Omada)
+    command = (
+        'apt-get install -y jsvc 2>/dev/null; '
+        f'dpkg -r omadac && dpkg -i "{filepath}"'
+    )
     _start_terminal(sid, command, f"Mise à jour Omada avec {filename}")
 
 
@@ -902,7 +926,11 @@ def handle_start_omada_install(data):
         return
 
     sid = request.sid
-    command = f'dpkg -i "{filepath}"'
+    # Ensure jsvc is installed (required dependency for Omada)
+    command = (
+        'apt-get install -y jsvc 2>/dev/null; '
+        f'dpkg -i "{filepath}"'
+    )
     _start_terminal(sid, command, f"Installation de Omada avec {filename}")
 
 

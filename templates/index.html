@@ -86,6 +86,11 @@
                         <span class="dep-name">MongoDB</span>
                         <span class="dep-detail text-muted" id="depMongoDetail">...</span>
                     </div>
+                    <div class="dep-item">
+                        <span class="dep-dot" id="depJsvcDot"></span>
+                        <span class="dep-name">JSVC</span>
+                        <span class="dep-detail text-muted" id="depJsvcDetail">...</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -610,6 +615,16 @@
                 } else {
                     mongoDot.className = 'dep-dot dep-missing';
                     mongoDetail.textContent = t('dep_missing');
+                }
+
+                const jsvcDot = document.getElementById('depJsvcDot');
+                const jsvcDetail = document.getElementById('depJsvcDetail');
+                if (data.jsvc && data.jsvc.installed) {
+                    jsvcDot.className = 'dep-dot dep-ok';
+                    jsvcDetail.textContent = data.jsvc.version || t('dep_installed');
+                } else {
+                    jsvcDot.className = 'dep-dot dep-missing';
+                    jsvcDetail.textContent = t('dep_missing');
                 }
             });
     }
