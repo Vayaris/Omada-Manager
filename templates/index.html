@@ -221,26 +221,6 @@
             </div>
         </section>
 
-        <!-- Uninstall Section (shown when Omada is installed) -->
-        <section class="card" id="uninstallCard" style="display:none;">
-            <div class="card-header">
-                <h2 data-i18n="uninstall_omada">Désinstaller Omada</h2>
-            </div>
-            <div class="card-body">
-                <p class="text-muted" style="margin-bottom:16px;" data-i18n="uninstall_desc">
-                    Désinstaller complètement Omada Controller de ce serveur. L'interface de gestion (Omada Manager) sera conservée.
-                </p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="btn btn-warning" onclick="uninstallOmada(false)" data-i18n="uninstall_omada_only">
-                        Désinstaller Omada uniquement
-                    </button>
-                    <button class="btn btn-danger" onclick="uninstallOmada(true)" data-i18n="uninstall_omada_full">
-                        Désinstaller Omada + dépendances
-                    </button>
-                </div>
-            </div>
-        </section>
-
         <!-- Install / Update Section (always visible) -->
         <section class="card" id="installCard">
             <div class="card-header">
@@ -293,6 +273,26 @@
                         <span class="terminal-status" id="terminalStatus" data-i18n="in_progress">En cours...</span>
                     </div>
                     <div id="terminal" class="terminal-container"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Uninstall Section (shown when Omada is installed) -->
+        <section class="card" id="uninstallCard" style="display:none;">
+            <div class="card-header">
+                <h2 data-i18n="uninstall_omada">Désinstaller Omada</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted" style="margin-bottom:16px;" data-i18n="uninstall_desc">
+                    Désinstaller complètement Omada Controller de ce serveur. L'interface de gestion (Omada Manager) sera conservée.
+                </p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-warning" onclick="uninstallOmada(false)" data-i18n="uninstall_omada_only">
+                        Désinstaller Omada uniquement
+                    </button>
+                    <button class="btn btn-danger" onclick="uninstallOmada(true)" data-i18n="uninstall_omada_full">
+                        Désinstaller Omada + dépendances
+                    </button>
                 </div>
             </div>
         </section>
