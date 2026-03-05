@@ -46,10 +46,18 @@ CLUSTER_FILE_NAME = "cluster.tar.gz"
 CONFIG_FILE = os.path.join(BASE_DIR, "config.txt")
 DEFAULT_PORT = 30560
 
+# SSL / HTTPS
+SSL_DIR = os.path.join(BASE_DIR, "ssl")
+SSL_CERT = os.path.join(SSL_DIR, "cert.pem")
+SSL_KEY = os.path.join(SSL_DIR, "key.pem")
+
 # Auto-backup configuration
 AUTO_BACKUP_CONFIG = os.path.join(BASE_DIR, "auto_backup.json")
 AUTO_BACKUP_SCRIPT = os.path.join(BASE_DIR, "auto_backup.sh")
 CRON_COMMENT = "omada-web-manager-auto-backup"
+
+# Remote backup configuration
+REMOTE_BACKUP_CONFIG = os.path.join(BASE_DIR, "remote_backup.json")
 
 
 def generate_backup_filename():
@@ -445,7 +453,17 @@ def create_backup():
             purge_old_backups(cfg["max_backups"])
 
         size = os.path.getsize(os.path.join(OMADA_BACKUP_DIR, db_filename))
-        return {"success": True, "name": db_filename, "size": size}
+        response = {"success": True, "name": db_filename, "size": size}
+
+        # Send to remote storage if configured
+        remote_cfg = _get_remote_backup_config_raw()
+        if remote_cfg.get("enabled"):
+            remote_result = send_backup_remote(
+                os.path.join(OMADA_BACKUP_DIR, db_filename)
+            )
+            response["remote"] = remote_result
+
+        return response
     except Exception as e:
         return {"success": False, "message": str(e)}
 
@@ -515,6 +533,52 @@ def set_auto_backup_config(enabled, interval_days, max_backups=0):
 cd "{OMADA_BACKUP_DIR}"
 ls -1t *.tar.gz 2>/dev/null | grep -v '^cluster\\.tar\\.gz$' | tail -n +{max_backups + 1} | while read f; do rm -f "$f"; done"""
 
+    # Build remote upload commands if remote backup is configured
+    remote_line = ""
+    try:
+        remote_cfg = _get_remote_backup_config_raw()
+        if remote_cfg.get("enabled"):
+            method = remote_cfg.get("method", "")
+            if method == "scp":
+                s = remote_cfg.get("scp", {})
+                host, port = s.get("host", ""), str(s.get("port", 22))
+                user, pwd = s.get("user", ""), s.get("password", "")
+                key_path = s.get("key_path", "")
+                rpath = s.get("remote_path", "/backups/omada")
+                if host and user:
+                    if key_path:
+                        remote_line = f'\n# Remote backup via SCP\nscp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -P {port} -i "{key_path}" "{OMADA_BACKUP_DIR}/$BACKUP_FILE" "{user}@{host}:{rpath}/" 2>/dev/null || echo "[REMOTE] SCP send failed"'
+                    elif pwd:
+                        remote_line = f'\n# Remote backup via SCP\nsshpass -p \'{pwd}\' scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -P {port} "{OMADA_BACKUP_DIR}/$BACKUP_FILE" "{user}@{host}:{rpath}/" 2>/dev/null || echo "[REMOTE] SCP send failed"'
+            elif method == "smb":
+                s = remote_cfg.get("smb", {})
+                share, user = s.get("share", ""), s.get("user", "")
+                pwd, domain = s.get("password", ""), s.get("domain", "")
+                rpath = s.get("remote_path", "/").strip("/")
+                if share and user:
+                    auth = f"{domain}/{user}%{pwd}" if domain else f"{user}%{pwd}"
+                    smb_cmd = f"cd {rpath}; " if rpath else ""
+                    smb_cmd += 'put "{OMADA_BACKUP_DIR}/$BACKUP_FILE"'
+                    remote_line = f'\n# Remote backup via SMB\nsmbclient "{share}" -U "{auth}" -c "{smb_cmd}" 2>/dev/null || echo "[REMOTE] SMB send failed"'
+            elif method == "nfs":
+                s = remote_cfg.get("nfs", {})
+                nfs_share = s.get("share", "")
+                mount_opts = s.get("mount_options", "")
+                if nfs_share:
+                    mount_cmd = f'mount -t nfs -o {mount_opts} "{nfs_share}"' if mount_opts else f'mount -t nfs "{nfs_share}"'
+                    remote_line = f'\n# Remote backup via NFS\nmkdir -p /tmp/omada_nfs_mount\n{mount_cmd} /tmp/omada_nfs_mount 2>/dev/null && cp -f "{OMADA_BACKUP_DIR}/$BACKUP_FILE" /tmp/omada_nfs_mount/ && umount /tmp/omada_nfs_mount || echo "[REMOTE] NFS send failed"'
+            elif method == "s3":
+                s = remote_cfg.get("s3", {})
+                endpoint = s.get("endpoint", "")
+                bucket, ak = s.get("bucket", ""), s.get("access_key", "")
+                sk, prefix = s.get("secret_key", ""), s.get("prefix", "omada-backups/").strip("/")
+                if bucket and ak and sk:
+                    s3_path = f"s3://{bucket}/{prefix}/$BACKUP_FILE" if prefix else f"s3://{bucket}/$BACKUP_FILE"
+                    ep_flag = f' --endpoint-url "{endpoint}"' if endpoint else ""
+                    remote_line = f'\n# Remote backup via S3\nAWS_ACCESS_KEY_ID="{ak}" AWS_SECRET_ACCESS_KEY="{sk}" aws s3 cp "{OMADA_BACKUP_DIR}/$BACKUP_FILE" "{s3_path}"{ep_flag} 2>/dev/null || echo "[REMOTE] S3 send failed"'
+    except Exception:
+        pass  # If remote config can't be read, just skip remote upload in the script
+
     script_content = f"""#!/bin/bash
 # Auto-backup script for Omada Web Manager
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -523,7 +587,7 @@ cd "{OMADA_DATA_DIR}" 2>/dev/null || exit 1
 mkdir -p "{OMADA_BACKUP_DIR}"
 tar zcf "$BACKUP_FILE" --warning=no-file-changed db 2>/dev/null
 cp -f "$BACKUP_FILE" "{OMADA_BACKUP_DIR}/$BACKUP_FILE"
-rm -f "$BACKUP_FILE"{retention_line}
+rm -f "$BACKUP_FILE"{retention_line}{remote_line}
 """
     with open(AUTO_BACKUP_SCRIPT, "w") as f:
         f.write(script_content)
@@ -795,6 +859,99 @@ def api_auto_backup_set():
     except (TypeError, ValueError):
         max_backups = 0
     return jsonify(set_auto_backup_config(enabled, interval_days, max_backups))
+
+
+# ---------------------------------------------------------------------------
+# SSL API
+# ---------------------------------------------------------------------------
+@app.route("/api/ssl-info")
+@login_required
+def api_ssl_info():
+    return jsonify(get_ssl_info())
+
+
+@app.route("/api/ssl/regenerate", methods=["POST"])
+@login_required
+def api_ssl_regenerate():
+    try:
+        # Remove existing certificates
+        for f in (SSL_CERT, SSL_KEY):
+            if os.path.isfile(f):
+                os.remove(f)
+        ensure_ssl_certificate()
+        # Schedule a service restart so the new cert is loaded
+        def restart_service():
+            import time
+            time.sleep(2)
+            subprocess.Popen(
+                ["systemctl", "restart", MANAGER_SERVICE_NAME],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        threading.Thread(target=restart_service, daemon=True).start()
+        return jsonify({"success": True, "message": "Certificate regenerated. Service restarting..."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Remote Backup API
+# ---------------------------------------------------------------------------
+@app.route("/api/backup/remote-config")
+@login_required
+def api_remote_backup_config_get():
+    cfg = get_remote_backup_config()
+    return jsonify(mask_passwords(cfg))
+
+
+@app.route("/api/backup/remote-config", methods=["POST"])
+@login_required
+def api_remote_backup_config_set():
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON requis"}), 400
+    cfg = request.json
+    try:
+        save_remote_backup_config(cfg)
+        # Regenerate auto_backup.sh if auto-backup is enabled
+        auto_cfg = get_auto_backup_config()
+        if auto_cfg.get("enabled"):
+            set_auto_backup_config(
+                auto_cfg["enabled"],
+                auto_cfg["interval_days"],
+                auto_cfg.get("max_backups", 0)
+            )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@app.route("/api/backup/remote-test", methods=["POST"])
+@login_required
+def api_remote_backup_test():
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON requis"}), 400
+    cfg = request.json
+    # Resolve masked passwords from saved config
+    saved = _get_remote_backup_config_raw()
+    method = cfg.get("method", "scp")
+    if method in cfg and isinstance(cfg[method], dict):
+        for field in ("password", "secret_key"):
+            if cfg[method].get(field) == "***" and method in saved:
+                cfg[method][field] = saved[method].get(field, "")
+    return jsonify(test_remote_connection(cfg))
+
+
+@app.route("/api/backup/remote-send", methods=["POST"])
+@login_required
+def api_remote_backup_send():
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON requis"}), 400
+    filename = secure_filename(request.json.get("filename", ""))
+    if not filename:
+        return jsonify({"success": False, "message": "Nom de fichier requis"}), 400
+    filepath = os.path.join(OMADA_BACKUP_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({"success": False, "message": "Fichier introuvable"}), 404
+    return jsonify(send_backup_remote(filepath))
 
 
 @app.route("/api/manager-version")
@@ -1131,9 +1288,432 @@ def handle_disconnect():
 
 
 # ---------------------------------------------------------------------------
+# SSL / HTTPS helpers
+# ---------------------------------------------------------------------------
+def ensure_ssl_certificate():
+    """Generate a self-signed SSL certificate if it does not exist yet."""
+    os.makedirs(SSL_DIR, exist_ok=True)
+    if os.path.isfile(SSL_CERT) and os.path.isfile(SSL_KEY):
+        return (SSL_CERT, SSL_KEY)
+    print("[SSL] Generating self-signed certificate …")
+    result = subprocess.run(
+        [
+            "openssl", "req", "-x509",
+            "-newkey", "rsa:2048",
+            "-keyout", SSL_KEY,
+            "-out", SSL_CERT,
+            "-days", "3650",
+            "-nodes",
+            "-subj", "/CN=Omada Web Manager",
+        ],
+        capture_output=True, text=True, timeout=30
+    )
+    if result.returncode != 0:
+        print(f"[SSL] openssl error: {result.stderr}")
+        raise RuntimeError("Failed to generate SSL certificate")
+    # Restrict permissions
+    os.chmod(SSL_KEY, 0o600)
+    os.chmod(SSL_CERT, 0o644)
+    print("[SSL] Certificate generated successfully.")
+    return (SSL_CERT, SSL_KEY)
+
+
+def get_ssl_info():
+    """Return basic information about the current SSL certificate."""
+    if not os.path.isfile(SSL_CERT):
+        return {"exists": False}
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-in", SSL_CERT, "-noout",
+             "-subject", "-enddate", "-startdate"],
+            capture_output=True, text=True, timeout=10
+        )
+        info = {"exists": True, "self_signed": True}
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("subject="):
+                info["subject"] = line.split("=", 1)[1].strip()
+            elif line.startswith("notAfter="):
+                info["expires"] = line.split("=", 1)[1].strip()
+            elif line.startswith("notBefore="):
+                info["issued"] = line.split("=", 1)[1].strip()
+        return info
+    except Exception:
+        return {"exists": True, "error": "Cannot read certificate"}
+
+
+def run_http_redirect(https_port):
+    """Run a tiny HTTP server on port 80 that redirects everything to HTTPS."""
+    from flask import Flask as _Flask, redirect as _redirect, request as _request
+
+    redirect_app = _Flask("http_redirect")
+
+    @redirect_app.route("/", defaults={"path": ""})
+    @redirect_app.route("/<path:path>")
+    def _redirect_to_https(path):
+        host = _request.host.split(":")[0]
+        target = f"https://{host}:{https_port}/{path}"
+        if _request.query_string:
+            target += f"?{_request.query_string.decode()}"
+        return _redirect(target, code=301)
+
+    try:
+        redirect_app.run(host="0.0.0.0", port=80, threaded=True)
+    except OSError as e:
+        print(f"[HTTP→HTTPS] Could not start redirect server on port 80: {e}")
+    except Exception as e:
+        print(f"[HTTP→HTTPS] Redirect server error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Remote backup helpers
+# ---------------------------------------------------------------------------
+def get_remote_backup_config():
+    """Read remote backup configuration (passwords masked for API output)."""
+    default = {
+        "enabled": False, "method": "scp",
+        "scp": {"host": "", "port": 22, "user": "", "password": "",
+                "key_path": "", "remote_path": "/backups/omada"},
+        "smb": {"share": "", "user": "", "password": "",
+                "domain": "", "remote_path": "/omada"},
+        "nfs": {"share": "", "mount_options": ""},
+        "s3":  {"endpoint": "", "bucket": "", "access_key": "",
+                "secret_key": "", "prefix": "omada-backups/"},
+    }
+    try:
+        with open(REMOTE_BACKUP_CONFIG, "r") as f:
+            cfg = json.load(f)
+        # Merge with defaults to ensure all keys exist
+        for key in default:
+            if isinstance(default[key], dict):
+                if key not in cfg:
+                    cfg[key] = default[key]
+                else:
+                    for k2 in default[key]:
+                        if k2 not in cfg[key]:
+                            cfg[key][k2] = default[key][k2]
+            elif key not in cfg:
+                cfg[key] = default[key]
+        return cfg
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        return default
+
+
+def _get_remote_backup_config_raw():
+    """Read remote backup configuration with real passwords (internal use)."""
+    return get_remote_backup_config()
+
+
+def mask_passwords(cfg):
+    """Return a copy of config with password fields masked."""
+    import copy
+    masked = copy.deepcopy(cfg)
+    for section in ("scp", "smb", "s3"):
+        if section in masked and isinstance(masked[section], dict):
+            for field in ("password", "secret_key"):
+                if field in masked[section] and masked[section][field]:
+                    masked[section][field] = "***"
+    return masked
+
+
+def save_remote_backup_config(cfg):
+    """Write remote backup configuration to disk."""
+    # If passwords are masked (***), keep the old real passwords
+    try:
+        old_cfg = _get_remote_backup_config_raw()
+    except Exception:
+        old_cfg = {}
+    for section in ("scp", "smb", "s3"):
+        if section in cfg and isinstance(cfg[section], dict):
+            for field in ("password", "secret_key"):
+                if cfg[section].get(field) == "***" and section in old_cfg:
+                    cfg[section][field] = old_cfg[section].get(field, "")
+    with open(REMOTE_BACKUP_CONFIG, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.chmod(REMOTE_BACKUP_CONFIG, 0o600)
+
+
+def send_backup_remote(filepath):
+    """Send a backup file to the configured remote storage."""
+    cfg = _get_remote_backup_config_raw()
+    if not cfg.get("enabled"):
+        return {"success": False, "message": "Remote backup not enabled"}
+    method = cfg.get("method", "scp")
+    dispatch = {
+        "scp": _send_via_scp,
+        "smb": _send_via_smb,
+        "nfs": _send_via_nfs,
+        "s3":  _send_via_s3,
+    }
+    fn = dispatch.get(method)
+    if not fn:
+        return {"success": False, "message": f"Unknown method: {method}"}
+    try:
+        return fn(filepath, cfg.get(method, {}))
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def _send_via_scp(filepath, cfg):
+    """Send file via SCP/SFTP."""
+    host = cfg.get("host", "")
+    port = str(cfg.get("port", 22))
+    user = cfg.get("user", "")
+    password = cfg.get("password", "")
+    key_path = cfg.get("key_path", "")
+    remote_path = cfg.get("remote_path", "/backups/omada")
+
+    if not host or not user:
+        return {"success": False, "message": "SCP: host and user are required"}
+
+    filename = os.path.basename(filepath)
+    destination = f"{user}@{host}:{remote_path}/{filename}"
+
+    if key_path and os.path.isfile(key_path):
+        cmd = ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+               "-P", port, "-i", key_path, filepath, destination]
+    elif password:
+        if not shutil.which("sshpass"):
+            return {"success": False,
+                    "message": "SCP: 'sshpass' is not installed. Install it with: apt install sshpass"}
+        cmd = ["sshpass", "-p", password,
+               "scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+               "-P", port, filepath, destination]
+    else:
+        return {"success": False, "message": "SCP: password or SSH key required"}
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode == 0:
+        return {"success": True, "message": f"Sent via SCP to {host}:{remote_path}"}
+    return {"success": False, "message": f"SCP error: {result.stderr.strip()}"}
+
+
+def _send_via_smb(filepath, cfg):
+    """Send file via SMB/CIFS using smbclient."""
+    if not shutil.which("smbclient"):
+        return {"success": False,
+                "message": "SMB: 'smbclient' is not installed. Install it with: apt install smbclient"}
+    share = cfg.get("share", "")
+    user = cfg.get("user", "")
+    password = cfg.get("password", "")
+    domain = cfg.get("domain", "")
+    remote_path = cfg.get("remote_path", "/").strip("/")
+
+    if not share or not user:
+        return {"success": False, "message": "SMB: share and user are required"}
+
+    filename = os.path.basename(filepath)
+    auth = f"{user}%{password}"
+    if domain:
+        auth = f"{domain}/{auth}"
+
+    # Build smbclient command
+    smb_commands = ""
+    if remote_path:
+        smb_commands += f"cd {remote_path}; "
+    smb_commands += f"put {filepath} {filename}"
+
+    cmd = ["smbclient", share, "-U", auth, "-c", smb_commands]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode == 0:
+        return {"success": True, "message": f"Sent via SMB to {share}"}
+    return {"success": False, "message": f"SMB error: {result.stderr.strip()}"}
+
+
+def _send_via_nfs(filepath, cfg):
+    """Send file via NFS (temporary mount)."""
+    share = cfg.get("share", "")
+    mount_options = cfg.get("mount_options", "")
+
+    if not share:
+        return {"success": False, "message": "NFS: share is required (e.g. server:/path)"}
+
+    mount_point = "/tmp/omada_nfs_mount"
+    os.makedirs(mount_point, exist_ok=True)
+
+    try:
+        # Mount
+        mount_cmd = ["mount", "-t", "nfs"]
+        if mount_options:
+            mount_cmd += ["-o", mount_options]
+        mount_cmd += [share, mount_point]
+
+        result = subprocess.run(mount_cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return {"success": False, "message": f"NFS mount error: {result.stderr.strip()}"}
+
+        # Copy
+        filename = os.path.basename(filepath)
+        shutil.copy2(filepath, os.path.join(mount_point, filename))
+
+        return {"success": True, "message": f"Sent via NFS to {share}"}
+    except Exception as e:
+        return {"success": False, "message": f"NFS error: {str(e)}"}
+    finally:
+        # Unmount
+        subprocess.run(["umount", mount_point], capture_output=True, timeout=15)
+
+
+def _send_via_s3(filepath, cfg):
+    """Send file via S3-compatible storage (aws cli)."""
+    if not shutil.which("aws"):
+        return {"success": False,
+                "message": "S3: 'aws' CLI is not installed. Install it with: apt install awscli"}
+    endpoint = cfg.get("endpoint", "")
+    bucket = cfg.get("bucket", "")
+    access_key = cfg.get("access_key", "")
+    secret_key = cfg.get("secret_key", "")
+    prefix = cfg.get("prefix", "omada-backups/").strip("/")
+
+    if not bucket or not access_key or not secret_key:
+        return {"success": False, "message": "S3: bucket, access_key, and secret_key are required"}
+
+    filename = os.path.basename(filepath)
+    s3_path = f"s3://{bucket}/{prefix}/{filename}" if prefix else f"s3://{bucket}/{filename}"
+
+    env = os.environ.copy()
+    env["AWS_ACCESS_KEY_ID"] = access_key
+    env["AWS_SECRET_ACCESS_KEY"] = secret_key
+
+    cmd = ["aws", "s3", "cp", filepath, s3_path]
+    if endpoint:
+        cmd += ["--endpoint-url", endpoint]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
+    if result.returncode == 0:
+        return {"success": True, "message": f"Sent via S3 to {bucket}"}
+    return {"success": False, "message": f"S3 error: {result.stderr.strip()}"}
+
+
+def test_remote_connection(cfg):
+    """Test the remote connection without sending a file."""
+    method = cfg.get("method", "scp")
+    if method == "scp":
+        return _test_scp(cfg.get("scp", {}))
+    elif method == "smb":
+        return _test_smb(cfg.get("smb", {}))
+    elif method == "nfs":
+        return _test_nfs(cfg.get("nfs", {}))
+    elif method == "s3":
+        return _test_s3(cfg.get("s3", {}))
+    return {"success": False, "message": f"Unknown method: {method}"}
+
+
+def _test_scp(cfg):
+    host = cfg.get("host", "")
+    port = str(cfg.get("port", 22))
+    user = cfg.get("user", "")
+    password = cfg.get("password", "")
+    key_path = cfg.get("key_path", "")
+
+    if not host or not user:
+        return {"success": False, "message": "Host and user are required"}
+
+    if key_path and os.path.isfile(key_path):
+        cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+               "-p", port, "-i", key_path, f"{user}@{host}", "echo ok"]
+    elif password:
+        if not shutil.which("sshpass"):
+            return {"success": False, "message": "'sshpass' is not installed"}
+        cmd = ["sshpass", "-p", password,
+               "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+               "-p", port, f"{user}@{host}", "echo ok"]
+    else:
+        return {"success": False, "message": "Password or SSH key required"}
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    if result.returncode == 0 and "ok" in result.stdout:
+        return {"success": True, "message": f"SSH connection to {host} successful"}
+    return {"success": False, "message": f"SSH error: {result.stderr.strip() or 'Connection failed'}"}
+
+
+def _test_smb(cfg):
+    if not shutil.which("smbclient"):
+        return {"success": False, "message": "'smbclient' is not installed"}
+    share = cfg.get("share", "")
+    user = cfg.get("user", "")
+    password = cfg.get("password", "")
+    domain = cfg.get("domain", "")
+
+    if not share or not user:
+        return {"success": False, "message": "Share and user are required"}
+
+    auth = f"{user}%{password}"
+    if domain:
+        auth = f"{domain}/{auth}"
+
+    cmd = ["smbclient", share, "-U", auth, "-c", "ls"]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    if result.returncode == 0:
+        return {"success": True, "message": f"SMB connection to {share} successful"}
+    return {"success": False, "message": f"SMB error: {result.stderr.strip()}"}
+
+
+def _test_nfs(cfg):
+    share = cfg.get("share", "")
+    mount_options = cfg.get("mount_options", "")
+
+    if not share:
+        return {"success": False, "message": "Share is required (e.g. server:/path)"}
+
+    mount_point = "/tmp/omada_nfs_test"
+    os.makedirs(mount_point, exist_ok=True)
+
+    mount_cmd = ["mount", "-t", "nfs"]
+    if mount_options:
+        mount_cmd += ["-o", mount_options]
+    mount_cmd += [share, mount_point]
+
+    try:
+        result = subprocess.run(mount_cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            subprocess.run(["umount", mount_point], capture_output=True, timeout=10)
+            return {"success": True, "message": f"NFS mount of {share} successful"}
+        return {"success": False, "message": f"NFS error: {result.stderr.strip()}"}
+    except Exception as e:
+        subprocess.run(["umount", mount_point], capture_output=True, timeout=10)
+        return {"success": False, "message": f"NFS error: {str(e)}"}
+
+
+def _test_s3(cfg):
+    if not shutil.which("aws"):
+        return {"success": False, "message": "'aws' CLI is not installed"}
+    endpoint = cfg.get("endpoint", "")
+    bucket = cfg.get("bucket", "")
+    access_key = cfg.get("access_key", "")
+    secret_key = cfg.get("secret_key", "")
+
+    if not bucket or not access_key or not secret_key:
+        return {"success": False, "message": "Bucket, access_key, and secret_key are required"}
+
+    env = os.environ.copy()
+    env["AWS_ACCESS_KEY_ID"] = access_key
+    env["AWS_SECRET_ACCESS_KEY"] = secret_key
+
+    cmd = ["aws", "s3", "ls", f"s3://{bucket}"]
+    if endpoint:
+        cmd += ["--endpoint-url", endpoint]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15, env=env)
+    if result.returncode == 0:
+        return {"success": True, "message": f"S3 connection to {bucket} successful"}
+    return {"success": False, "message": f"S3 error: {result.stderr.strip()}"}
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     port = read_port()
-    socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
+
+    # Generate SSL certificate if needed
+    cert, key = ensure_ssl_certificate()
+
+    # Start HTTP→HTTPS redirect server on port 80 (background)
+    threading.Thread(target=run_http_redirect, args=(port,), daemon=True).start()
+
+    # Start main HTTPS server
+    socketio.run(app, host="0.0.0.0", port=port, debug=False,
+                 allow_unsafe_werkzeug=True,
+                 ssl_context=(cert, key))

@@ -9,4 +9,6 @@ start.sh
 omada-web.service
 auto_backup.json
 auto_backup.sh
+ssl/
+remote_backup.json
 .claude/

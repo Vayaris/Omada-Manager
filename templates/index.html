@@ -215,6 +215,173 @@
                         <span id="maxBackupsLabel" data-i18n="backups_unit">sauvegardes</span>
                     </div>
                 </div>
+
+                <!-- Remote Backup Configuration -->
+                <details class="remote-backup-details" id="remoteBackupDetails">
+                    <summary data-i18n="remote_backup">Stockage distant</summary>
+                    <div class="remote-backup-config">
+                        <div class="remote-backup-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="remoteBackupToggle" onchange="toggleRemoteBackup()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span data-i18n="remote_backup_enable">Activer l'envoi distant</span>
+                        </div>
+
+                        <div id="remoteConfigBody" style="display:none;">
+                            <!-- Method selector cards -->
+                            <div class="remote-method-cards" id="remoteMethodCards">
+                                <button type="button" class="method-card active" data-method="scp" onclick="selectRemoteMethod('scp')">
+                                    <span class="method-card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+                                    <span class="method-card-label">SCP / SFTP</span>
+                                    <span class="method-card-desc" data-i18n="remote_scp_desc">Transfert SSH</span>
+                                </button>
+                                <button type="button" class="method-card" data-method="smb" onclick="selectRemoteMethod('smb')">
+                                    <span class="method-card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></span>
+                                    <span class="method-card-label">SMB / CIFS</span>
+                                    <span class="method-card-desc" data-i18n="remote_smb_desc">Partage Windows</span>
+                                </button>
+                                <button type="button" class="method-card" data-method="nfs" onclick="selectRemoteMethod('nfs')">
+                                    <span class="method-card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></span>
+                                    <span class="method-card-label">NFS</span>
+                                    <span class="method-card-desc" data-i18n="remote_nfs_desc">Partage Linux</span>
+                                </button>
+                                <button type="button" class="method-card" data-method="s3" onclick="selectRemoteMethod('s3')">
+                                    <span class="method-card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg></span>
+                                    <span class="method-card-label">S3</span>
+                                    <span class="method-card-desc" data-i18n="remote_s3_desc">AWS / MinIO</span>
+                                </button>
+                            </div>
+                            <input type="hidden" id="remoteMethod" value="scp">
+
+                            <!-- Dependency hint -->
+                            <div class="remote-dep-hint" id="remoteDependencyHint" style="display:none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                <span id="remoteDependencyText"></span>
+                            </div>
+
+                            <!-- SCP fields -->
+                            <div class="remote-fields" id="remoteFieldsScp">
+                                <div class="field-group">
+                                    <div class="field-row-inline">
+                                        <div class="field-col flex-3">
+                                            <label data-i18n="remote_host">Serveur</label>
+                                            <input type="text" id="scpHost" placeholder="192.168.1.100">
+                                        </div>
+                                        <div class="field-col flex-1">
+                                            <label>Port</label>
+                                            <input type="number" id="scpPort" value="22" min="1" max="65535">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <div class="field-row-inline">
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_user">Utilisateur</label>
+                                            <input type="text" id="scpUser" placeholder="root">
+                                        </div>
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_password">Mot de passe</label>
+                                            <input type="password" id="scpPassword" autocomplete="off" placeholder="********">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_key_path">Clé SSH (optionnel)</label>
+                                    <input type="text" id="scpKeyPath" placeholder="/root/.ssh/id_rsa">
+                                    <span class="field-hint" data-i18n="remote_key_hint">Si renseigné, la clé SSH sera utilisée au lieu du mot de passe</span>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_path">Chemin distant</label>
+                                    <input type="text" id="scpRemotePath" value="/backups/omada" placeholder="/backups/omada">
+                                </div>
+                            </div>
+
+                            <!-- SMB fields -->
+                            <div class="remote-fields" id="remoteFieldsSmb" style="display:none;">
+                                <div class="field-group">
+                                    <label data-i18n="remote_share">Partage</label>
+                                    <input type="text" id="smbShare" placeholder="//192.168.1.100/backups">
+                                    <span class="field-hint" data-i18n="remote_smb_share_hint">Format : //adresse_ip/nom_du_partage</span>
+                                </div>
+                                <div class="field-group">
+                                    <div class="field-row-inline">
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_user">Utilisateur</label>
+                                            <input type="text" id="smbUser" placeholder="backup_user">
+                                        </div>
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_password">Mot de passe</label>
+                                            <input type="password" id="smbPassword" autocomplete="off" placeholder="********">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_domain">Domaine</label>
+                                    <input type="text" id="smbDomain" value="WORKGROUP" placeholder="WORKGROUP">
+                                    <span class="field-hint" data-i18n="remote_domain_hint">Domaine Active Directory ou WORKGROUP par défaut</span>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_path">Chemin distant</label>
+                                    <input type="text" id="smbRemotePath" value="/omada" placeholder="/omada">
+                                    <span class="field-hint" data-i18n="remote_smb_path_hint">Sous-dossier dans le partage</span>
+                                </div>
+                            </div>
+
+                            <!-- NFS fields -->
+                            <div class="remote-fields" id="remoteFieldsNfs" style="display:none;">
+                                <div class="field-group">
+                                    <label data-i18n="remote_share">Partage</label>
+                                    <input type="text" id="nfsShare" placeholder="192.168.1.100:/export/backups">
+                                    <span class="field-hint" data-i18n="remote_nfs_share_hint">Format : adresse_ip:/chemin/export</span>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_mount_options">Options de montage</label>
+                                    <input type="text" id="nfsMountOptions" value="nolock,soft" placeholder="nolock,soft">
+                                    <span class="field-hint" data-i18n="remote_nfs_options_hint">Options de montage NFS (séparées par des virgules)</span>
+                                </div>
+                            </div>
+
+                            <!-- S3 fields -->
+                            <div class="remote-fields" id="remoteFieldsS3" style="display:none;">
+                                <div class="field-group">
+                                    <label data-i18n="remote_endpoint">Endpoint URL</label>
+                                    <input type="text" id="s3Endpoint" value="https://s3.amazonaws.com" placeholder="https://s3.amazonaws.com">
+                                    <span class="field-hint" data-i18n="remote_s3_endpoint_hint">AWS, MinIO, Wasabi, Backblaze B2...</span>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_bucket">Bucket</label>
+                                    <input type="text" id="s3Bucket" placeholder="my-omada-backups">
+                                </div>
+                                <div class="field-group">
+                                    <div class="field-row-inline">
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_access_key">Access Key</label>
+                                            <input type="text" id="s3AccessKey" placeholder="AKIAIOSFODNN7EXAMPLE">
+                                        </div>
+                                        <div class="field-col flex-1">
+                                            <label data-i18n="remote_secret_key">Secret Key</label>
+                                            <input type="password" id="s3SecretKey" autocomplete="off" placeholder="********">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <label data-i18n="remote_prefix">Préfixe</label>
+                                    <input type="text" id="s3Prefix" value="omada-backups/" placeholder="omada-backups/">
+                                    <span class="field-hint" data-i18n="remote_s3_prefix_hint">Dossier virtuel dans le bucket</span>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="remote-actions">
+                                <button class="btn btn-sm btn-outline" onclick="testRemoteConnection()" id="btnRemoteTest" data-i18n="remote_test">Tester la connexion</button>
+                                <button class="btn btn-sm btn-primary" onclick="saveRemoteConfig()" id="btnRemoteSave" data-i18n="remote_save">Sauvegarder</button>
+                            </div>
+                            <div class="remote-test-result" id="remoteTestResult" style="display:none;"></div>
+                        </div>
+                    </div>
+                </details>
+
                 <div id="backupList">
                     <p class="text-muted" data-i18n="loading">Chargement...</p>
                 </div>
@@ -408,6 +575,50 @@
             confirm_uninstall_omada: "Désinstaller Omada Controller ?\n\nLe paquet omadac sera supprimé.\nLes données resteront dans /opt/tplink.\nOmada Manager restera actif.",
             confirm_uninstall_full: "Désinstaller Omada Controller ET toutes les dépendances ?\n\nCela supprimera :\n- Omada Controller (omadac)\n- Java (openjdk-17-jre-headless)\n- MongoDB (mongodb-org)\n- JSVC\n\nOmada Manager restera actif.",
             confirm_uninstall_double: "ATTENTION : Cette opération est irréversible.\n\nÊtes-vous absolument sûr de vouloir tout désinstaller ?",
+            remote_backup: "Stockage distant",
+            remote_backup_enable: "Activer l'envoi distant",
+            remote_method: "Méthode",
+            remote_host: "Serveur",
+            remote_user: "Utilisateur",
+            remote_password: "Mot de passe",
+            remote_key_path: "Clé SSH (optionnel)",
+            remote_key_hint: "Si renseigné, la clé SSH sera utilisée au lieu du mot de passe",
+            remote_path: "Chemin distant",
+            remote_share: "Partage",
+            remote_domain: "Domaine",
+            remote_domain_hint: "Domaine Active Directory ou WORKGROUP par défaut",
+            remote_mount_options: "Options de montage",
+            remote_endpoint: "Endpoint URL",
+            remote_bucket: "Bucket",
+            remote_access_key: "Access Key",
+            remote_secret_key: "Secret Key",
+            remote_prefix: "Préfixe",
+            remote_test: "Tester la connexion",
+            remote_testing: "Test en cours...",
+            remote_save: "Sauvegarder",
+            remote_test_success: "Connexion réussie",
+            remote_test_fail: "Échec de connexion",
+            remote_saved: "Configuration sauvegardée",
+            remote_save_error: "Erreur lors de la sauvegarde",
+            remote_send: "Envoyer",
+            remote_sending: "Envoi en cours...",
+            remote_sent: "Backup envoyé avec succès",
+            remote_send_fail: "Échec de l'envoi distant",
+            remote_backup_auto_info: "Les backups seront aussi envoyés au stockage distant",
+            remote_scp_desc: "Transfert SSH",
+            remote_smb_desc: "Partage Windows",
+            remote_nfs_desc: "Partage Linux",
+            remote_s3_desc: "AWS / MinIO",
+            remote_dep_scp: "Nécessite sshpass (apt install sshpass) pour l'authentification par mot de passe. La clé SSH fonctionne nativement.",
+            remote_dep_smb: "Nécessite smbclient (apt install smbclient) pour l'envoi vers un partage Windows.",
+            remote_dep_nfs: "Nécessite nfs-common (apt install nfs-common) pour le montage NFS.",
+            remote_dep_s3: "Nécessite awscli (apt install awscli) pour l'envoi vers un bucket S3.",
+            remote_smb_share_hint: "Format : //adresse_ip/nom_du_partage",
+            remote_smb_path_hint: "Sous-dossier dans le partage",
+            remote_nfs_share_hint: "Format : adresse_ip:/chemin/export",
+            remote_nfs_options_hint: "Options de montage NFS (séparées par des virgules)",
+            remote_s3_endpoint_hint: "AWS, MinIO, Wasabi, Backblaze B2...",
+            remote_s3_prefix_hint: "Dossier virtuel dans le bucket",
         },
         en: {
             logout: "Logout",
@@ -507,6 +718,50 @@
             confirm_uninstall_omada: "Uninstall Omada Controller?\n\nThe omadac package will be removed.\nData will remain in /opt/tplink.\nOmada Manager will stay active.",
             confirm_uninstall_full: "Uninstall Omada Controller AND all dependencies?\n\nThis will remove:\n- Omada Controller (omadac)\n- Java (openjdk-17-jre-headless)\n- MongoDB (mongodb-org)\n- JSVC\n\nOmada Manager will stay active.",
             confirm_uninstall_double: "WARNING: This operation is irreversible.\n\nAre you absolutely sure you want to uninstall everything?",
+            remote_backup: "Remote storage",
+            remote_backup_enable: "Enable remote upload",
+            remote_method: "Method",
+            remote_host: "Server",
+            remote_user: "Username",
+            remote_password: "Password",
+            remote_key_path: "SSH key (optional)",
+            remote_key_hint: "If provided, the SSH key will be used instead of the password",
+            remote_path: "Remote path",
+            remote_share: "Share",
+            remote_domain: "Domain",
+            remote_domain_hint: "Active Directory domain or WORKGROUP by default",
+            remote_mount_options: "Mount options",
+            remote_endpoint: "Endpoint URL",
+            remote_bucket: "Bucket",
+            remote_access_key: "Access Key",
+            remote_secret_key: "Secret Key",
+            remote_prefix: "Prefix",
+            remote_test: "Test connection",
+            remote_testing: "Testing...",
+            remote_save: "Save",
+            remote_test_success: "Connection successful",
+            remote_test_fail: "Connection failed",
+            remote_saved: "Configuration saved",
+            remote_save_error: "Save error",
+            remote_send: "Send",
+            remote_sending: "Sending...",
+            remote_sent: "Backup sent successfully",
+            remote_send_fail: "Remote send failed",
+            remote_backup_auto_info: "Backups will also be sent to remote storage",
+            remote_scp_desc: "SSH transfer",
+            remote_smb_desc: "Windows share",
+            remote_nfs_desc: "Linux share",
+            remote_s3_desc: "AWS / MinIO",
+            remote_dep_scp: "Requires sshpass (apt install sshpass) for password auth. SSH key works natively.",
+            remote_dep_smb: "Requires smbclient (apt install smbclient) for Windows share upload.",
+            remote_dep_nfs: "Requires nfs-common (apt install nfs-common) for NFS mount.",
+            remote_dep_s3: "Requires awscli (apt install awscli) for S3 bucket upload.",
+            remote_smb_share_hint: "Format: //ip_address/share_name",
+            remote_smb_path_hint: "Subfolder within the share",
+            remote_nfs_share_hint: "Format: ip_address:/export/path",
+            remote_nfs_options_hint: "NFS mount options (comma-separated)",
+            remote_s3_endpoint_hint: "AWS, MinIO, Wasabi, Backblaze B2...",
+            remote_s3_prefix_hint: "Virtual folder in the bucket",
         }
     };
 
@@ -761,6 +1016,7 @@
                     list.innerHTML = `<p class="text-muted">${t('no_backups')}</p>`;
                     return;
                 }
+                const remoteEnabled = document.getElementById('remoteBackupToggle') && document.getElementById('remoteBackupToggle').checked;
                 list.innerHTML = backups.map(b => `
                     <div class="file-item">
                         <div class="file-info">
@@ -770,6 +1026,7 @@
                         <div class="file-actions">
                             <button class="btn btn-sm btn-success" onclick="restoreBackup('${b.name}')">${t('restore')}</button>
                             <a href="/api/backup/download/${b.name}" class="btn btn-sm btn-secondary">${t('download')}</a>
+                            ${remoteEnabled ? `<button class="btn btn-sm btn-outline" onclick="sendBackupRemote('${b.name}')">${t('remote_send')}</button>` : ''}
                             <button class="btn btn-sm btn-danger" onclick="deleteBackup('${b.name}')">${t('delete')}</button>
                         </div>
                     </div>
@@ -791,6 +1048,13 @@
         .then(data => {
             if (data.success) {
                 showToast(t('backup_created'), 'success');
+                if (data.remote) {
+                    if (data.remote.success) {
+                        showToast(t('remote_sent'), 'success');
+                    } else {
+                        showToast(data.remote.message || t('remote_send_fail'), 'error');
+                    }
+                }
                 loadBackups();
             } else {
                 showToast(data.message || t('backup_error'), 'error');
@@ -912,6 +1176,202 @@
             }
         })
         .catch(() => {});
+    }
+
+    // ===================================================================
+    // Remote Backup
+    // ===================================================================
+    function loadRemoteBackupConfig() {
+        fetch('/api/backup/remote-config')
+            .then(r => r.json())
+            .then(data => {
+                const toggle = document.getElementById('remoteBackupToggle');
+                toggle.checked = data.enabled;
+                document.getElementById('remoteConfigBody').style.display = data.enabled ? 'block' : 'none';
+
+                const method = data.method || 'scp';
+                selectRemoteMethod(method);
+
+                // Fill SCP fields
+                if (data.scp) {
+                    document.getElementById('scpHost').value = data.scp.host || '';
+                    document.getElementById('scpPort').value = data.scp.port || 22;
+                    document.getElementById('scpUser').value = data.scp.user || '';
+                    document.getElementById('scpPassword').value = data.scp.password || '';
+                    document.getElementById('scpKeyPath').value = data.scp.key_path || '';
+                    document.getElementById('scpRemotePath').value = data.scp.remote_path || '/backups/omada';
+                }
+                // Fill SMB fields
+                if (data.smb) {
+                    document.getElementById('smbShare').value = data.smb.share || '';
+                    document.getElementById('smbUser').value = data.smb.user || '';
+                    document.getElementById('smbPassword').value = data.smb.password || '';
+                    document.getElementById('smbDomain').value = data.smb.domain || 'WORKGROUP';
+                    document.getElementById('smbRemotePath').value = data.smb.remote_path || '/omada';
+                }
+                // Fill NFS fields
+                if (data.nfs) {
+                    document.getElementById('nfsShare').value = data.nfs.share || '';
+                    document.getElementById('nfsMountOptions').value = data.nfs.mount_options || 'nolock,soft';
+                }
+                // Fill S3 fields
+                if (data.s3) {
+                    document.getElementById('s3Endpoint').value = data.s3.endpoint || 'https://s3.amazonaws.com';
+                    document.getElementById('s3Bucket').value = data.s3.bucket || '';
+                    document.getElementById('s3AccessKey').value = data.s3.access_key || '';
+                    document.getElementById('s3SecretKey').value = data.s3.secret_key || '';
+                    document.getElementById('s3Prefix').value = data.s3.prefix || 'omada-backups/';
+                }
+            })
+            .catch(() => {});
+    }
+
+    function toggleRemoteBackup() {
+        const enabled = document.getElementById('remoteBackupToggle').checked;
+        document.getElementById('remoteConfigBody').style.display = enabled ? 'block' : 'none';
+    }
+
+    function selectRemoteMethod(method) {
+        // Update hidden input
+        document.getElementById('remoteMethod').value = method;
+
+        // Update card active state
+        document.querySelectorAll('.method-card').forEach(card => {
+            card.classList.toggle('active', card.dataset.method === method);
+        });
+
+        // Show/hide field panels
+        document.querySelectorAll('.remote-fields').forEach(el => el.style.display = 'none');
+        const fieldMap = { scp: 'remoteFieldsScp', smb: 'remoteFieldsSmb', nfs: 'remoteFieldsNfs', s3: 'remoteFieldsS3' };
+        const target = document.getElementById(fieldMap[method]);
+        if (target) target.style.display = 'block';
+
+        // Show dependency hint
+        const hintEl = document.getElementById('remoteDependencyHint');
+        const hintText = document.getElementById('remoteDependencyText');
+        const deps = {
+            scp: { pkg: 'sshpass', hint: t('remote_dep_scp') },
+            smb: { pkg: 'smbclient', hint: t('remote_dep_smb') },
+            nfs: { pkg: 'nfs-common', hint: t('remote_dep_nfs') },
+            s3:  { pkg: 'awscli', hint: t('remote_dep_s3') }
+        };
+        if (deps[method]) {
+            hintText.textContent = deps[method].hint;
+            hintEl.style.display = 'flex';
+        } else {
+            hintEl.style.display = 'none';
+        }
+
+        // Hide test result when switching
+        document.getElementById('remoteTestResult').style.display = 'none';
+    }
+
+    function buildRemoteConfig() {
+        return {
+            enabled: document.getElementById('remoteBackupToggle').checked,
+            method: document.getElementById('remoteMethod').value,
+            scp: {
+                host: document.getElementById('scpHost').value,
+                port: parseInt(document.getElementById('scpPort').value) || 22,
+                user: document.getElementById('scpUser').value,
+                password: document.getElementById('scpPassword').value,
+                key_path: document.getElementById('scpKeyPath').value,
+                remote_path: document.getElementById('scpRemotePath').value,
+            },
+            smb: {
+                share: document.getElementById('smbShare').value,
+                user: document.getElementById('smbUser').value,
+                password: document.getElementById('smbPassword').value,
+                domain: document.getElementById('smbDomain').value,
+                remote_path: document.getElementById('smbRemotePath').value,
+            },
+            nfs: {
+                share: document.getElementById('nfsShare').value,
+                mount_options: document.getElementById('nfsMountOptions').value,
+            },
+            s3: {
+                endpoint: document.getElementById('s3Endpoint').value,
+                bucket: document.getElementById('s3Bucket').value,
+                access_key: document.getElementById('s3AccessKey').value,
+                secret_key: document.getElementById('s3SecretKey').value,
+                prefix: document.getElementById('s3Prefix').value,
+            },
+        };
+    }
+
+    function saveRemoteConfig() {
+        const cfg = buildRemoteConfig();
+        const btn = document.getElementById('btnRemoteSave');
+        btn.disabled = true;
+
+        fetch('/api/backup/remote-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast(t('remote_saved'), 'success');
+            } else {
+                showToast(data.message || t('remote_save_error'), 'error');
+            }
+        })
+        .catch(() => showToast(t('connection_error'), 'error'))
+        .finally(() => { btn.disabled = false; });
+    }
+
+    function testRemoteConnection() {
+        const cfg = buildRemoteConfig();
+        const btn = document.getElementById('btnRemoteTest');
+        const resultDiv = document.getElementById('remoteTestResult');
+        btn.disabled = true;
+        btn.textContent = t('remote_testing');
+        resultDiv.style.display = 'none';
+
+        fetch('/api/backup/remote-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+        })
+        .then(r => r.json())
+        .then(data => {
+            resultDiv.style.display = 'block';
+            if (data.success) {
+                resultDiv.className = 'remote-test-result remote-test-success';
+                resultDiv.textContent = data.message || t('remote_test_success');
+            } else {
+                resultDiv.className = 'remote-test-result remote-test-fail';
+                resultDiv.textContent = data.message || t('remote_test_fail');
+            }
+        })
+        .catch(() => {
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'remote-test-result remote-test-fail';
+            resultDiv.textContent = t('connection_error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = t('remote_test');
+        });
+    }
+
+    function sendBackupRemote(filename) {
+        showToast(t('remote_sending'), 'info');
+        fetch('/api/backup/remote-send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast(t('remote_sent'), 'success');
+            } else {
+                showToast(data.message || t('remote_send_fail'), 'error');
+            }
+        })
+        .catch(() => showToast(t('connection_error'), 'error'));
     }
 
     // ===================================================================
@@ -1356,6 +1816,7 @@
         loadDiskUsage();
         loadSystemStats();
         loadAutoBackupConfig();
+        loadRemoteBackupConfig();
         loadManagerVersion();
         checkManagerUpdate();
         initSocket();

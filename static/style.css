@@ -1168,3 +1168,263 @@ body {
     color: var(--warning);
     animation: pulse 1.5s infinite;
 }
+
+/* ===================================================================
+   Remote Backup
+   =================================================================== */
+.remote-backup-details {
+    margin-bottom: 16px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    transition: background 0.25s, border-color 0.25s;
+}
+
+.remote-backup-details > summary {
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.remote-backup-details > summary:hover {
+    color: var(--text-primary);
+}
+
+.remote-backup-details > summary::before {
+    content: "\25B8";
+    display: inline-block;
+    transition: transform 0.2s;
+    font-size: 11px;
+}
+
+.remote-backup-details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.remote-backup-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.remote-backup-config {
+    padding: 0 14px 14px 14px;
+}
+
+.remote-backup-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Method selector cards */
+.remote-method-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.method-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 6px 10px;
+    background: var(--input-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.method-card:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.method-card.active {
+    border-color: var(--accent);
+    background: rgba(122, 162, 247, 0.08);
+    color: var(--accent);
+}
+
+[data-theme="light"] .method-card.active {
+    background: rgba(64, 120, 242, 0.06);
+}
+
+.method-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.method-card-icon svg {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.method-card:hover .method-card-icon svg,
+.method-card.active .method-card-icon svg {
+    opacity: 1;
+}
+
+.method-card-label {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.method-card-desc {
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+/* Dependency hint */
+.remote-dep-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 14px;
+    background: rgba(125, 207, 255, 0.06);
+    border: 1px solid rgba(125, 207, 255, 0.15);
+    border-radius: var(--radius);
+    font-size: 11px;
+    color: var(--info);
+    line-height: 1.4;
+}
+
+.remote-dep-hint svg {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+/* Field groups */
+.remote-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.field-group > label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.field-group > input,
+.field-col > input {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.field-group > input:focus,
+.field-col > input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.field-group > input::placeholder,
+.field-col > input::placeholder {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.field-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+/* Inline field rows (host+port, user+password) */
+.field-row-inline {
+    display: flex;
+    gap: 10px;
+}
+
+.field-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.field-col > label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.field-col.flex-1 { flex: 1; }
+.field-col.flex-2 { flex: 2; }
+.field-col.flex-3 { flex: 3; }
+
+/* Actions */
+.remote-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.remote-test-result {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.remote-test-success {
+    background: rgba(158, 206, 106, 0.1);
+    color: var(--success);
+    border: 1px solid rgba(158, 206, 106, 0.25);
+}
+
+.remote-test-fail {
+    background: rgba(247, 118, 142, 0.1);
+    color: var(--danger);
+    border: 1px solid rgba(247, 118, 142, 0.25);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .remote-method-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .field-row-inline {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

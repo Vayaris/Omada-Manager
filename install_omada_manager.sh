@@ -103,6 +103,8 @@ if [ "$L" = "fr" ]; then
     MSG_SUCCESS="Installation terminée avec succès !"
     MSG_ACCESS="Interface web accessible sur :"
     MSG_LOGIN="Connectez-vous avec vos identifiants système Linux."
+    MSG_HTTPS_NOTE="Certificat SSL auto-signé généré automatiquement."
+    MSG_HTTP_REDIRECT="http://<IP> (port 80) redirige automatiquement vers HTTPS."
     MSG_COMMANDS="Commandes utiles :"
     MSG_CMD_STATUS="Voir le statut"
     MSG_CMD_RESTART="Redémarrer"
@@ -151,6 +153,8 @@ else
     MSG_SUCCESS="Installation completed successfully!"
     MSG_ACCESS="Web interface available at:"
     MSG_LOGIN="Log in with your Linux system credentials."
+    MSG_HTTPS_NOTE="Self-signed SSL certificate generated automatically."
+    MSG_HTTP_REDIRECT="http://<IP> (port 80) automatically redirects to HTTPS."
     MSG_COMMANDS="Useful commands:"
     MSG_CMD_STATUS="View status"
     MSG_CMD_RESTART="Restart"
@@ -223,7 +227,7 @@ echo ""
 echo -e "${YELLOW}[1/10] ${MSG_STEP1}${NC}"
 apt-get update -qq
 apt-get upgrade -y > /dev/null 2>&1
-apt-get install -y python3-pip python3-venv curl gnupg jsvc > /dev/null 2>&1
+apt-get install -y python3-pip python3-venv curl gnupg jsvc openssl sshpass > /dev/null 2>&1
 echo -e "${GREEN}  -> ${MSG_STEP1_OK}${NC}"
 
 # -------------------------------------------------------------------
@@ -278,6 +282,7 @@ echo -e "${YELLOW}[4/10] ${MSG_STEP4}${NC}"
 mkdir -p "${INSTALL_DIR}/templates"
 mkdir -p "${INSTALL_DIR}/static"
 mkdir -p "${INSTALL_DIR}/uploads"
+mkdir -p "${INSTALL_DIR}/ssl"
 echo -e "${GREEN}  -> ${MSG_STEP4_OK} : ${INSTALL_DIR}${NC}"
 
 # -------------------------------------------------------------------
@@ -376,7 +381,10 @@ if systemctl is-active --quiet ${SERVICE_NAME}.service; then
     echo -e "${GREEN}============================================${NC}"
     echo ""
     echo -e "  ${MSG_ACCESS}"
-    echo -e "  ${CYAN}http://${IP}:${PORT}${NC}"
+    echo -e "  ${CYAN}https://${IP}:${PORT}${NC}"
+    echo ""
+    echo -e "  ${GREEN}${MSG_HTTPS_NOTE}${NC}"
+    echo -e "  ${MSG_HTTP_REDIRECT}"
     echo ""
     echo -e "  ${MSG_LOGIN}"
     echo ""
