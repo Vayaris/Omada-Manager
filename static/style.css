@@ -340,9 +340,15 @@ body {
     #notInstalledBanner,
     #depsCard,
     #backupCard,
+    #uninstallCard,
     #installCard {
         grid-column: 1 / -1;
     }
+}
+
+.card-deps-warning {
+    border-color: var(--danger);
+    border-style: dashed;
 }
 
 /* ===================================================================

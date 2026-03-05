@@ -934,6 +934,96 @@ def handle_start_omada_install(data):
     _start_terminal(sid, command, f"Installation de Omada avec {filename}")
 
 
+@socketio.on("start_fix_deps")
+def handle_start_fix_deps(data):
+    """Reinstall missing dependencies (Java, MongoDB, JSVC)."""
+    if not session.get("logged_in"):
+        emit("terminal_output", {"data": "Non authentifié.\r\n"})
+        return
+
+    sid = request.sid
+    deps = check_dependencies()
+    commands = []
+
+    if not deps["jsvc"]["installed"]:
+        commands.append('echo "=== Installing JSVC ===" && apt-get install -y jsvc')
+
+    if not deps["java"]["installed"]:
+        commands.append('echo "=== Installing Java 17 ===" && apt-get install -y openjdk-17-jre-headless')
+
+    if not deps["mongodb"]["installed"]:
+        commands.append(
+            'echo "=== Installing MongoDB 7.0 ===" && '
+            "curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | "
+            "gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg 2>/dev/null && "
+            'echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] '
+            'https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" '
+            "> /etc/apt/sources.list.d/mongodb-org-7.0.list && "
+            "apt-get update -qq && "
+            "apt-get install -y mongodb-org && "
+            "systemctl start mongod && "
+            "systemctl enable mongod"
+        )
+
+    if not commands:
+        emit("terminal_output", {"data": "\033[32mAll dependencies are already installed.\033[0m\r\n"})
+        emit("install_complete", {"exit_code": 0})
+        return
+
+    full_command = "apt-get update -qq && " + " && ".join(commands)
+    _start_terminal(sid, full_command, "Reinstallation des dependances")
+
+
+@socketio.on("start_uninstall_omada")
+def handle_start_uninstall_omada(data):
+    """Completely uninstall Omada Controller and optionally all dependencies."""
+    if not session.get("logged_in"):
+        emit("terminal_output", {"data": "Non authentifié.\r\n"})
+        return
+
+    remove_deps = data.get("remove_deps", False)
+    sid = request.sid
+
+    parts = []
+
+    # Stop Omada service
+    parts.append('echo "=== Arret du service Omada ===" && systemctl stop tpeap 2>/dev/null || true')
+
+    # Remove omadac package
+    parts.append('echo "=== Suppression de Omada Controller (omadac) ===" && dpkg --purge omadac 2>/dev/null || dpkg -r omadac 2>/dev/null || true')
+
+    if remove_deps:
+        # Remove MongoDB
+        parts.append(
+            'echo "=== Suppression de MongoDB ===" && '
+            "systemctl stop mongod 2>/dev/null || true && "
+            "systemctl disable mongod 2>/dev/null || true && "
+            "apt-get purge -y mongodb-org mongodb-org-server mongodb-org-shell "
+            "mongodb-org-mongos mongodb-org-tools mongodb-org-database "
+            "mongodb-org-database-tools-extra 2>/dev/null || true && "
+            "apt-get autoremove -y 2>/dev/null || true"
+        )
+
+        # Remove Java
+        parts.append(
+            'echo "=== Suppression de Java ===" && '
+            "apt-get purge -y openjdk-17-jre-headless 2>/dev/null || true && "
+            "apt-get autoremove -y 2>/dev/null || true"
+        )
+
+        # Remove JSVC
+        parts.append(
+            'echo "=== Suppression de JSVC ===" && '
+            "apt-get purge -y jsvc 2>/dev/null || true && "
+            "apt-get autoremove -y 2>/dev/null || true"
+        )
+
+    parts.append('echo "=== Desinstallation terminee ==="')
+
+    full_command = " && ".join(parts)
+    _start_terminal(sid, full_command, "Desinstallation de Omada Controller")
+
+
 def read_terminal(sid, fd, pid):
     """Background task to read from the PTY and emit to the client."""
     output_buffer = ""

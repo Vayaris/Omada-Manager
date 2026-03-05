@@ -72,7 +72,10 @@
         <section class="card" id="depsCard" style="display:none;">
             <div class="card-header">
                 <h2 data-i18n="dependencies">Dépendances</h2>
-                <button class="btn btn-sm btn-outline" onclick="checkDeps()" data-i18n="refresh">Actualiser</button>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-sm btn-warning" id="btnFixDeps" onclick="fixDependencies()" style="display:none;" data-i18n="fix_deps">Réparer</button>
+                    <button class="btn btn-sm btn-outline" onclick="checkDeps()" data-i18n="refresh">Actualiser</button>
+                </div>
             </div>
             <div class="card-body">
                 <div class="deps-list" id="depsList">
@@ -214,6 +217,26 @@
                 </div>
                 <div id="backupList">
                     <p class="text-muted" data-i18n="loading">Chargement...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Uninstall Section (shown when Omada is installed) -->
+        <section class="card" id="uninstallCard" style="display:none;">
+            <div class="card-header">
+                <h2 data-i18n="uninstall_omada">Désinstaller Omada</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted" style="margin-bottom:16px;" data-i18n="uninstall_desc">
+                    Désinstaller complètement Omada Controller de ce serveur. L'interface de gestion (Omada Manager) sera conservée.
+                </p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-warning" onclick="uninstallOmada(false)" data-i18n="uninstall_omada_only">
+                        Désinstaller Omada uniquement
+                    </button>
+                    <button class="btn btn-danger" onclick="uninstallOmada(true)" data-i18n="uninstall_omada_full">
+                        Désinstaller Omada + dépendances
+                    </button>
                 </div>
             </div>
         </section>
@@ -376,6 +399,15 @@
             retention: "Rétention : max",
             retention_unlimited: "Illimitée",
             backups_unit: "sauvegardes",
+            fix_deps: "Réparer",
+            confirm_fix_deps: "Réinstaller les dépendances manquantes ?\n\nCette opération installera les paquets nécessaires (Java, MongoDB, JSVC) via apt.",
+            uninstall_omada: "Désinstaller Omada",
+            uninstall_desc: "Désinstaller complètement Omada Controller de ce serveur. L'interface de gestion (Omada Manager) sera conservée.",
+            uninstall_omada_only: "Désinstaller Omada uniquement",
+            uninstall_omada_full: "Désinstaller Omada + dépendances",
+            confirm_uninstall_omada: "Désinstaller Omada Controller ?\n\nLe paquet omadac sera supprimé.\nLes données resteront dans /opt/tplink.\nOmada Manager restera actif.",
+            confirm_uninstall_full: "Désinstaller Omada Controller ET toutes les dépendances ?\n\nCela supprimera :\n- Omada Controller (omadac)\n- Java (openjdk-17-jre-headless)\n- MongoDB (mongodb-org)\n- JSVC\n\nOmada Manager restera actif.",
+            confirm_uninstall_double: "ATTENTION : Cette opération est irréversible.\n\nÊtes-vous absolument sûr de vouloir tout désinstaller ?",
         },
         en: {
             logout: "Logout",
@@ -466,6 +498,15 @@
             retention: "Retention: max",
             retention_unlimited: "Unlimited",
             backups_unit: "backups",
+            fix_deps: "Fix",
+            confirm_fix_deps: "Reinstall missing dependencies?\n\nThis will install required packages (Java, MongoDB, JSVC) via apt.",
+            uninstall_omada: "Uninstall Omada",
+            uninstall_desc: "Completely uninstall Omada Controller from this server. The management interface (Omada Manager) will be preserved.",
+            uninstall_omada_only: "Uninstall Omada only",
+            uninstall_omada_full: "Uninstall Omada + dependencies",
+            confirm_uninstall_omada: "Uninstall Omada Controller?\n\nThe omadac package will be removed.\nData will remain in /opt/tplink.\nOmada Manager will stay active.",
+            confirm_uninstall_full: "Uninstall Omada Controller AND all dependencies?\n\nThis will remove:\n- Omada Controller (omadac)\n- Java (openjdk-17-jre-headless)\n- MongoDB (mongodb-org)\n- JSVC\n\nOmada Manager will stay active.",
+            confirm_uninstall_double: "WARNING: This operation is irreversible.\n\nAre you absolutely sure you want to uninstall everything?",
         }
     };
 
@@ -572,6 +613,7 @@
         const depsCard = document.getElementById('depsCard');
         const serviceCard = document.getElementById('serviceCard');
         const backupCard = document.getElementById('backupCard');
+        const uninstallCard = document.getElementById('uninstallCard');
         const titleEl = document.getElementById('installCardTitle');
         const badge = document.getElementById('versionBadge');
 
@@ -580,23 +622,26 @@
             depsCard.style.display = '';
             serviceCard.style.display = 'none';
             backupCard.style.display = 'none';
+            uninstallCard.style.display = 'none';
             titleEl.textContent = t('install_omada');
             badge.textContent = t('not_installed_badge');
             badge.className = 'version-badge version-not-installed';
-            checkDeps();
         } else {
             banner.style.display = 'none';
-            depsCard.style.display = 'none';
             serviceCard.style.display = '';
             backupCard.style.display = '';
+            uninstallCard.style.display = '';
             titleEl.textContent = t('update_omada');
         }
+        checkDeps();
     }
 
     function checkDeps() {
         fetch('/api/dependencies')
             .then(r => r.json())
             .then(data => {
+                let anyMissing = false;
+
                 const javaDot = document.getElementById('depJavaDot');
                 const javaDetail = document.getElementById('depJavaDetail');
                 if (data.java.installed) {
@@ -605,6 +650,7 @@
                 } else {
                     javaDot.className = 'dep-dot dep-missing';
                     javaDetail.textContent = t('dep_missing');
+                    anyMissing = true;
                 }
 
                 const mongoDot = document.getElementById('depMongoDot');
@@ -615,6 +661,7 @@
                 } else {
                     mongoDot.className = 'dep-dot dep-missing';
                     mongoDetail.textContent = t('dep_missing');
+                    anyMissing = true;
                 }
 
                 const jsvcDot = document.getElementById('depJsvcDot');
@@ -625,6 +672,19 @@
                 } else {
                     jsvcDot.className = 'dep-dot dep-missing';
                     jsvcDetail.textContent = t('dep_missing');
+                    anyMissing = true;
+                }
+
+                // Show/hide Fix button
+                document.getElementById('btnFixDeps').style.display = anyMissing ? '' : 'none';
+
+                // Show deps card when Omada is installed only if deps are missing
+                const depsCard = document.getElementById('depsCard');
+                if (omadaInstalled) {
+                    depsCard.style.display = anyMissing ? '' : 'none';
+                    depsCard.classList.toggle('card-deps-warning', anyMissing);
+                } else {
+                    depsCard.classList.remove('card-deps-warning');
                 }
             });
     }
@@ -1179,15 +1239,77 @@
                 status.className = 'terminal-status status-error';
                 showToast(t('install_error'), 'error');
             }
-            // Re-check everything after install/update
+            // Re-check everything after install/update/uninstall
             setTimeout(() => {
                 checkOmadaInstalled();
                 refreshStatus();
                 loadBackups();
                 loadUploadedFiles();
                 loadDiskUsage();
+                checkDeps();
             }, 3000);
         });
+    }
+
+    function initTerminal() {
+        const isDark = currentTheme === 'dark';
+        term = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+            theme: isDark ? {
+                background: '#1a1b26',
+                foreground: '#c0caf5',
+                cursor: '#c0caf5',
+                selectionBackground: '#33467c',
+                black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
+                blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6'
+            } : {
+                background: '#fafafa',
+                foreground: '#383a42',
+                cursor: '#383a42',
+                selectionBackground: '#bfceff',
+                black: '#383a42', red: '#e45649', green: '#50a14f', yellow: '#c18401',
+                blue: '#4078f2', magenta: '#a626a4', cyan: '#0184bc', white: '#fafafa'
+            },
+            scrollback: 5000
+        });
+
+        fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        term.onData((data) => {
+            if (socket && socket.connected) {
+                socket.emit('terminal_input', { data: data });
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if (fitAddon) {
+                fitAddon.fit();
+                if (socket && socket.connected) {
+                    socket.emit('terminal_resize', {
+                        rows: term.rows,
+                        cols: term.cols
+                    });
+                }
+            }
+        });
+    }
+
+    function showTerminal() {
+        const section = document.getElementById('terminalSection');
+        section.style.display = 'block';
+        document.getElementById('terminalStatus').textContent = t('in_progress');
+        document.getElementById('terminalStatus').className = 'terminal-status';
+        if (!term) {
+            initTerminal();
+        } else {
+            term.clear();
+        }
+        section.scrollIntoView({ behavior: 'smooth' });
     }
 
     function startInstall(filename) {
@@ -1204,64 +1326,22 @@
 
         if (!confirm(confirmMsg)) return;
 
-        const section = document.getElementById('terminalSection');
-        section.style.display = 'block';
-        document.getElementById('terminalStatus').textContent = t('in_progress');
-        document.getElementById('terminalStatus').className = 'terminal-status';
-
-        if (!term) {
-            const isDark = currentTheme === 'dark';
-            term = new Terminal({
-                cursorBlink: true,
-                fontSize: 14,
-                fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-                theme: isDark ? {
-                    background: '#1a1b26',
-                    foreground: '#c0caf5',
-                    cursor: '#c0caf5',
-                    selectionBackground: '#33467c',
-                    black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
-                    blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6'
-                } : {
-                    background: '#fafafa',
-                    foreground: '#383a42',
-                    cursor: '#383a42',
-                    selectionBackground: '#bfceff',
-                    black: '#383a42', red: '#e45649', green: '#50a14f', yellow: '#c18401',
-                    blue: '#4078f2', magenta: '#a626a4', cyan: '#0184bc', white: '#fafafa'
-                },
-                scrollback: 5000
-            });
-
-            fitAddon = new FitAddon.FitAddon();
-            term.loadAddon(fitAddon);
-            term.open(document.getElementById('terminal'));
-            fitAddon.fit();
-
-            term.onData((data) => {
-                if (socket && socket.connected) {
-                    socket.emit('terminal_input', { data: data });
-                }
-            });
-
-            window.addEventListener('resize', () => {
-                if (fitAddon) {
-                    fitAddon.fit();
-                    if (socket && socket.connected) {
-                        socket.emit('terminal_resize', {
-                            rows: term.rows,
-                            cols: term.cols
-                        });
-                    }
-                }
-            });
-        } else {
-            term.clear();
-        }
-
-        section.scrollIntoView({ behavior: 'smooth' });
-
+        showTerminal();
         socket.emit(eventName, { filename: filename });
+    }
+
+    function fixDependencies() {
+        if (!confirm(t('confirm_fix_deps'))) return;
+        showTerminal();
+        socket.emit('start_fix_deps', {});
+    }
+
+    function uninstallOmada(removeDeps) {
+        const confirmMsg = removeDeps ? t('confirm_uninstall_full') : t('confirm_uninstall_omada');
+        if (!confirm(confirmMsg)) return;
+        if (removeDeps && !confirm(t('confirm_uninstall_double'))) return;
+        showTerminal();
+        socket.emit('start_uninstall_omada', { remove_deps: removeDeps });
     }
 
     // ===================================================================
