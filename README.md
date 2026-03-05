@@ -3,6 +3,7 @@
   <img src="https://img.shields.io/badge/Python-3.10+-green?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/License-Open_Source-orange" alt="License">
   <img src="https://img.shields.io/badge/Lang-EN_|_FR-purple" alt="Languages">
+  <img src="https://img.shields.io/badge/HTTPS-Forced-brightgreen?logo=letsencrypt&logoColor=white" alt="HTTPS">
 </p>
 
 <h1 align="center">Omada Web Manager</h1>
@@ -26,6 +27,11 @@
 | **Service control** | Start, stop, restart with one click |
 | **Firmware update** | Upload a new `.deb` version and update through an interactive terminal |
 | **Backup & restore** | Native Omada backup mechanism (`/opt/tplink/omada_db_backup/`) |
+| **Auto-backup** | Scheduled backups with configurable interval and retention policy |
+| **Remote backup** | Send backups to remote storage: SCP/SFTP, SMB/CIFS, NFS, or S3-compatible |
+| **Forced HTTPS** | Self-signed SSL certificate with automatic HTTP to HTTPS redirect |
+| **Dependency repair** | Detect and reinstall missing dependencies (Java, MongoDB, JSVC) from the UI |
+| **Uninstall Omada** | Remove Omada Controller (with or without dependencies) directly from the web UI |
 | **Disk monitoring** | Visual disk usage bar — warns before you run out of space |
 | **Dark / Light theme** | Toggle between themes, saved in browser |
 | **EN / FR** | Full bilingual interface, auto-detects browser language |
@@ -38,7 +44,7 @@
 - **Root** or **sudo** access
 - Internet connection
 
-> The installer **automatically** handles: **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv)
+> The installer **automatically** handles: **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv), **OpenSSL**, **sshpass**
 
 ---
 
@@ -54,8 +60,9 @@ That's it. The script will:
 2. Install Java 17 + MongoDB 7.0 if missing
 3. Download app files from GitHub into `/opt/omada-web-manager/`
 4. Create a Python venv and install dependencies
-5. Set up and start a `omada-web` systemd service
-6. Display the access URL
+5. Generate a self-signed SSL certificate
+6. Set up and start a `omada-web` systemd service
+7. Display the HTTPS access URL
 
 ### Manual install
 
@@ -72,8 +79,12 @@ sudo bash install_omada_manager.sh
 Open your browser and go to:
 
 ```
-http://<SERVER_IP>:30560
+https://<SERVER_IP>:30560
 ```
+
+> A self-signed SSL certificate is generated automatically. Your browser will show a security warning on first visit — this is expected, just accept the certificate.
+
+> **HTTP redirect**: `http://<SERVER_IP>` (port 80) automatically redirects to HTTPS.
 
 Log in with your **Linux system credentials** (same as SSH). Authentication uses PAM.
 
@@ -84,7 +95,7 @@ Log in with your **Linux system credentials** (same as SSH). Authentication uses
 ### When Omada is NOT installed
 
 1. The dashboard shows a **"Omada Controller is not installed"** banner
-2. Dependency status (Java, MongoDB) is displayed
+2. Dependency status (Java, MongoDB, JSVC) is displayed — with a **Fix** button if something is missing
 3. Upload an Omada `.deb` file via drag & drop or file picker
 4. Click **"Install Omada"** — an interactive terminal opens in the page
 5. Follow the prompts, the page refreshes automatically when done
@@ -114,7 +125,25 @@ Uses Omada's **native backup system** (same as the uninstall script). Stored in 
 
 - **Create** — archives the MongoDB database
 - **Restore** — stops the service, restores data, restarts the service
+- **Download** — download a backup archive to your computer
 - **Delete** — removes a backup to free disk space
+
+#### Auto-backup
+
+Enable scheduled backups with a configurable interval (1, 3, 7, 14, or 30 days) and retention policy (keep N most recent backups or unlimited). Backups run automatically at 3 AM via cron.
+
+#### Remote backup storage
+
+Send backups to a remote destination automatically. Four methods are supported:
+
+| Method | Description | Requires |
+|--------|-------------|----------|
+| **SCP / SFTP** | SSH-based transfer (password or SSH key) | `sshpass` (for password auth) |
+| **SMB / CIFS** | Windows network shares | `smbclient` |
+| **NFS** | Linux network file system | `nfs-common` |
+| **S3 Compatible** | AWS S3, MinIO, Wasabi, Backblaze B2... | `awscli` |
+
+The UI provides a visual card-based selector with pre-filled defaults, field descriptions, and dependency hints. You can test the connection before saving, and manually send any existing backup to the configured remote storage.
 
 ### File management
 
@@ -146,6 +175,9 @@ A usage bar is displayed above the upload zone:
 ├── start.sh                   # Startup script (generated at install)
 ├── venv/                      # Isolated Python environment
 ├── uploads/                   # Uploaded .deb files
+├── ssl/                       # Auto-generated SSL certificate
+│   ├── cert.pem               # Self-signed certificate
+│   └── key.pem                # Private key
 ├── templates/
 │   ├── login.html             # Login page
 │   └── index.html             # Main dashboard
@@ -166,7 +198,8 @@ journalctl -u omada-web -n 50   # View logs
 
 | Port | Used by |
 |------|---------|
-| 30560 (default) | Omada Web Manager |
+| 80 | HTTP redirect (auto-redirect to HTTPS) |
+| 30560 (default) | Omada Web Manager (HTTPS) |
 | 8088 | Omada Controller (HTTP) |
 | 8043 | Omada Controller (HTTPS) |
 | 8843 | Omada Controller (HTTPS portal) |
@@ -175,8 +208,11 @@ journalctl -u omada-web -n 50   # View logs
 
 ### Security
 
+- **Forced HTTPS** with auto-generated self-signed SSL certificate (RSA 2048-bit, 10-year validity)
+- **Automatic HTTP to HTTPS redirect** on port 80
 - **PAM authentication** (Linux system accounts)
 - Random session secret (Flask)
+- Remote backup passwords are masked in API responses and never logged
 - Filename sanitization on upload
 - Only `.deb` files accepted (max **500 MB**)
 
@@ -201,9 +237,11 @@ sudo rm -rf /opt/omada-web-manager
 | Problem | Solution |
 |---------|----------|
 | Service won't start | `journalctl -u omada-web -n 30` to check logs |
+| SSL certificate warning | This is normal for self-signed certificates — accept the exception in your browser |
 | "No space left on device" | Delete old `.deb` files or backups from the web interface |
 | Can't log in | Use **Linux system** credentials (not Omada Controller credentials). Check `systemctl status omada-web` |
 | Omada install fails | Check Java 17 + MongoDB in the Dependencies section. Check disk space |
+| Remote backup fails | Ensure the required package is installed (`sshpass`, `smbclient`, `nfs-common`, or `awscli`) |
 
 ---
 
@@ -226,6 +264,11 @@ sudo rm -rf /opt/omada-web-manager
 | **Contrôle du service** | Démarrer, arrêter, redémarrer en un clic |
 | **Mise à jour firmware** | Uploader une nouvelle version `.deb` et mettre à jour via un terminal interactif |
 | **Backup & restauration** | Mécanisme de sauvegarde natif Omada (`/opt/tplink/omada_db_backup/`) |
+| **Backup automatique** | Sauvegardes planifiées avec intervalle et politique de rétention configurables |
+| **Backup distant** | Envoi des backups vers un stockage distant : SCP/SFTP, SMB/CIFS, NFS ou S3 |
+| **HTTPS forcé** | Certificat SSL auto-signé avec redirection automatique HTTP vers HTTPS |
+| **Réparation des dépendances** | Détection et réinstallation des dépendances manquantes (Java, MongoDB, JSVC) depuis l'interface |
+| **Désinstaller Omada** | Supprimer Omada Controller (avec ou sans dépendances) directement depuis l'interface web |
 | **Surveillance du disque** | Barre visuelle d'utilisation du disque — alerte avant de manquer d'espace |
 | **Thème sombre / clair** | Basculer entre les thèmes, sauvegardé dans le navigateur |
 | **FR / EN** | Interface entièrement bilingue, détecte automatiquement la langue du navigateur |
@@ -238,7 +281,7 @@ sudo rm -rf /opt/omada-web-manager
 - Accès **root** ou **sudo**
 - Connexion internet
 
-> L'installateur gère **automatiquement** : **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv)
+> L'installateur gère **automatiquement** : **Java 17**, **MongoDB 7.0**, **Python 3** (pip + venv), **OpenSSL**, **sshpass**
 
 ---
 
@@ -254,8 +297,9 @@ C'est tout. Le script va :
 2. Installer Java 17 + MongoDB 7.0 si absents
 3. Télécharger les fichiers depuis GitHub dans `/opt/omada-web-manager/`
 4. Créer un environnement Python virtuel et installer les dépendances
-5. Configurer et démarrer un service systemd `omada-web`
-6. Afficher l'URL d'accès
+5. Générer un certificat SSL auto-signé
+6. Configurer et démarrer un service systemd `omada-web`
+7. Afficher l'URL d'accès HTTPS
 
 ### Installation manuelle
 
@@ -272,8 +316,12 @@ sudo bash install_omada_manager.sh
 Ouvrez votre navigateur et allez sur :
 
 ```
-http://<IP_DU_SERVEUR>:30560
+https://<IP_DU_SERVEUR>:30560
 ```
+
+> Un certificat SSL auto-signé est généré automatiquement. Votre navigateur affichera un avertissement de sécurité à la première visite — c'est normal, il suffit d'accepter le certificat.
+
+> **Redirection HTTP** : `http://<IP_DU_SERVEUR>` (port 80) redirige automatiquement vers HTTPS.
 
 Connectez-vous avec vos **identifiants Linux** (les mêmes que pour SSH). L'authentification utilise PAM.
 
@@ -284,7 +332,7 @@ Connectez-vous avec vos **identifiants Linux** (les mêmes que pour SSH). L'auth
 ### Quand Omada n'est PAS installé
 
 1. Le tableau de bord affiche un bandeau **"Omada Controller n'est pas installé"**
-2. L'état des dépendances (Java, MongoDB) est affiché
+2. L'état des dépendances (Java, MongoDB, JSVC) est affiché — avec un bouton **Réparer** si quelque chose manque
 3. Uploadez un fichier `.deb` Omada par glisser-déposer ou sélection
 4. Cliquez sur **"Installer Omada"** — un terminal interactif s'ouvre dans la page
 5. Suivez les instructions, la page se rafraîchit automatiquement à la fin
@@ -314,7 +362,25 @@ Utilise le **système de backup natif d'Omada** (le même que le script de dési
 
 - **Créer** — archive la base de données MongoDB
 - **Restaurer** — arrête le service, restaure les données, relance le service
+- **Télécharger** — télécharge une archive de backup sur votre ordinateur
 - **Supprimer** — supprime une sauvegarde pour libérer de l'espace
+
+#### Backup automatique
+
+Activez les sauvegardes planifiées avec un intervalle configurable (1, 3, 7, 14 ou 30 jours) et une politique de rétention (garder les N plus récents ou illimité). Les backups s'exécutent automatiquement à 3h du matin via cron.
+
+#### Stockage distant
+
+Envoyez vos backups automatiquement vers un stockage distant. Quatre méthodes supportées :
+
+| Méthode | Description | Nécessite |
+|---------|-------------|-----------|
+| **SCP / SFTP** | Transfert SSH (mot de passe ou clé SSH) | `sshpass` (pour l'auth par mot de passe) |
+| **SMB / CIFS** | Partage réseau Windows | `smbclient` |
+| **NFS** | Système de fichiers réseau Linux | `nfs-common` |
+| **S3 Compatible** | AWS S3, MinIO, Wasabi, Backblaze B2... | `awscli` |
+
+L'interface propose un sélecteur visuel sous forme de cartes avec des valeurs pré-remplies, des descriptions de champs et des indications de dépendances. Vous pouvez tester la connexion avant de sauvegarder, et envoyer manuellement n'importe quel backup existant vers le stockage distant configuré.
 
 ### Gestion des fichiers
 
@@ -346,6 +412,9 @@ Une barre d'utilisation est affichée au-dessus de la zone d'upload :
 ├── start.sh                   # Script de démarrage (généré à l'install)
 ├── venv/                      # Environnement Python isolé
 ├── uploads/                   # Fichiers .deb uploadés
+├── ssl/                       # Certificat SSL auto-généré
+│   ├── cert.pem               # Certificat auto-signé
+│   └── key.pem                # Clé privée
 ├── templates/
 │   ├── login.html             # Page de connexion
 │   └── index.html             # Tableau de bord principal
@@ -366,7 +435,8 @@ journalctl -u omada-web -n 50      # Voir les logs
 
 | Port | Utilisé par |
 |------|-------------|
-| 30560 (défaut) | Omada Web Manager |
+| 80 | Redirection HTTP (redirige auto vers HTTPS) |
+| 30560 (défaut) | Omada Web Manager (HTTPS) |
 | 8088 | Omada Controller (HTTP) |
 | 8043 | Omada Controller (HTTPS) |
 | 8843 | Omada Controller (HTTPS portail) |
@@ -375,8 +445,11 @@ journalctl -u omada-web -n 50      # Voir les logs
 
 ### Sécurité
 
+- **HTTPS forcé** avec certificat SSL auto-signé généré automatiquement (RSA 2048-bit, validité 10 ans)
+- **Redirection automatique HTTP vers HTTPS** sur le port 80
 - **Authentification PAM** (comptes système Linux)
 - Secret de session aléatoire (Flask)
+- Les mots de passe du backup distant sont masqués dans les réponses API et jamais loggés
 - Nettoyage des noms de fichiers uploadés
 - Seuls les fichiers `.deb` sont acceptés (max **500 Mo**)
 
@@ -401,9 +474,11 @@ sudo rm -rf /opt/omada-web-manager
 | Problème | Solution |
 |----------|----------|
 | Le service ne démarre pas | `journalctl -u omada-web -n 30` pour voir les logs |
+| Avertissement de certificat SSL | C'est normal pour un certificat auto-signé — acceptez l'exception dans votre navigateur |
 | "No space left on device" | Supprimer les anciens `.deb` ou backups depuis l'interface web |
 | Impossible de se connecter | Utiliser les identifiants **Linux** (pas ceux d'Omada Controller). Vérifier `systemctl status omada-web` |
 | L'installation d'Omada échoue | Vérifier Java 17 + MongoDB dans la section Dépendances. Vérifier l'espace disque |
+| Le backup distant échoue | Vérifier que le paquet requis est installé (`sshpass`, `smbclient`, `nfs-common` ou `awscli`) |
 
 ---
 
