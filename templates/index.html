@@ -604,6 +604,7 @@
                     document.getElementById('versionBadge').className = 'version-badge';
                 }
                 updateUIForInstallState();
+                refreshStatus();
             })
             .catch(() => {});
     }
@@ -1241,8 +1242,7 @@
             }
             // Re-check everything after install/update/uninstall
             setTimeout(() => {
-                checkOmadaInstalled();
-                refreshStatus();
+                checkOmadaInstalled(); // also calls refreshStatus() once done
                 loadBackups();
                 loadUploadedFiles();
                 loadDiskUsage();
@@ -1350,8 +1350,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         applyTheme();
         applyLang();
-        checkOmadaInstalled();
-        refreshStatus();
+        checkOmadaInstalled(); // also calls refreshStatus() once done
         loadUploadedFiles();
         loadBackups();
         loadDiskUsage();
@@ -1362,8 +1361,7 @@
         initSocket();
 
         statusInterval = setInterval(() => {
-            checkOmadaInstalled();
-            refreshStatus();
+            checkOmadaInstalled(); // also calls refreshStatus() once done
             loadSystemStats();
         }, 10000);
     });

@@ -103,6 +103,12 @@ def allowed_file(filename):
 
 def get_service_status():
     """Return the status of the Omada service."""
+    # Reload systemd to pick up any new/changed unit files (after install/uninstall)
+    try:
+        subprocess.run(["systemctl", "daemon-reload"], capture_output=True, timeout=10)
+    except Exception:
+        pass
+
     try:
         result = subprocess.run(
             ["systemctl", "is-active", SERVICE_NAME],
@@ -906,7 +912,8 @@ def handle_start_install(data):
     # Ensure jsvc is installed (required dependency for Omada)
     command = (
         'apt-get install -y jsvc 2>/dev/null; '
-        f'dpkg -r omadac && dpkg -i "{filepath}"'
+        f'dpkg -r omadac && dpkg -i "{filepath}" && '
+        'systemctl daemon-reload && systemctl start tpeap'
     )
     _start_terminal(sid, command, f"Mise à jour Omada avec {filename}")
 
@@ -929,7 +936,8 @@ def handle_start_omada_install(data):
     # Ensure jsvc is installed (required dependency for Omada)
     command = (
         'apt-get install -y jsvc 2>/dev/null; '
-        f'dpkg -i "{filepath}"'
+        f'dpkg -i "{filepath}" && '
+        'systemctl daemon-reload && systemctl start tpeap'
     )
     _start_terminal(sid, command, f"Installation de Omada avec {filename}")
 
