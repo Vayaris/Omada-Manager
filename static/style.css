@@ -1528,6 +1528,12 @@ body {
     max-width: 520px;
     width: 90vw;
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    /* Center the dialog on all browsers */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
 }
 
 #sshMachineModal::backdrop {
@@ -1593,7 +1599,12 @@ body {
     width: min(800px, 92vw);
     max-height: 80vh;
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
-    /* display: flex must only apply when dialog is open */
+    /* Center the dialog on all browsers */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
 }
 
 #sshLogsModal[open] {
