@@ -2,3 +2,4 @@ flask
 flask-socketio
 python-pam
 six
+paramiko>=3.4

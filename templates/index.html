@@ -463,7 +463,95 @@
                 </div>
             </div>
         </section>
+
+        <!-- Remote SSH Machines -->
+        <section class="card" id="remoteSSHCard">
+            <div class="card-header">
+                <h2 data-i18n="ssh.title">Machines distantes SSH</h2>
+                <button class="btn btn-sm btn-primary" onclick="showSSHMachineModal()">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" style="flex-shrink:0"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    <span data-i18n="ssh.add">Ajouter</span>
+                </button>
+            </div>
+            <div class="card-body" id="sshMachinesList">
+                <div class="ssh-empty-state" data-i18n="ssh.empty">Aucune machine configurée. Cliquez sur "Ajouter" pour commencer.</div>
+            </div>
+        </section>
+
     </main>
+
+    <!-- SSH Machine Modal -->
+    <dialog id="sshMachineModal">
+        <div class="modal-header">
+            <h3 id="sshModalTitle" data-i18n="ssh.add_title">Ajouter une machine SSH</h3>
+            <button class="btn btn-sm btn-icon" onclick="document.getElementById('sshMachineModal').close()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="field-group">
+                <label data-i18n="ssh.label">Label</label>
+                <input type="text" id="sshFieldLabel" placeholder="VPS OVH">
+            </div>
+            <div class="field-group">
+                <div class="field-row-inline">
+                    <div class="field-col flex-3">
+                        <label data-i18n="ssh.host">Hôte / IP</label>
+                        <input type="text" id="sshFieldHost" placeholder="192.168.1.50">
+                    </div>
+                    <div class="field-col flex-1">
+                        <label>Port</label>
+                        <input type="number" id="sshFieldPort" value="22" min="1" max="65535">
+                    </div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label data-i18n="ssh.user">Utilisateur</label>
+                <input type="text" id="sshFieldUser" value="root" placeholder="root">
+            </div>
+            <div class="field-group">
+                <label data-i18n="ssh.auth_method">Authentification</label>
+                <div style="display:flex;gap:20px;margin-top:6px;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="radio" name="sshAuth" value="password" checked onchange="toggleSSHAuthFields('password')">
+                        <span data-i18n="ssh.auth_pass">Mot de passe</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="radio" name="sshAuth" value="key" onchange="toggleSSHAuthFields('key')">
+                        <span data-i18n="ssh.auth_key">Clé SSH</span>
+                    </label>
+                </div>
+            </div>
+            <div class="field-group" id="sshPassGroup">
+                <label data-i18n="ssh.password">Mot de passe</label>
+                <input type="password" id="sshFieldPass" autocomplete="off" placeholder="••••••••">
+            </div>
+            <div class="field-group" id="sshKeyGroup" style="display:none">
+                <label data-i18n="ssh.key_path">Chemin de la clé SSH</label>
+                <input type="text" id="sshFieldKeyPath" placeholder="/root/.ssh/id_rsa">
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline" onclick="testSSHConnection()" data-i18n="ssh.test">Tester la connexion</button>
+                <div id="sshTestResult" class="ssh-test-result" style="display:none"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-sm btn-outline" onclick="document.getElementById('sshMachineModal').close()" data-i18n="cancel">Annuler</button>
+            <button class="btn btn-sm btn-primary" onclick="saveSSHMachine()" data-i18n="save">Enregistrer</button>
+        </div>
+    </dialog>
+
+    <!-- SSH Logs Modal -->
+    <dialog id="sshLogsModal">
+        <div class="modal-header">
+            <h3 data-i18n="ssh.logs_title">Journaux service Omada</h3>
+            <button class="btn btn-sm btn-icon" onclick="document.getElementById('sshLogsModal').close()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="console-output" id="sshLogsContent" style="max-height:400px"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-sm btn-outline" onclick="document.getElementById('sshLogsModal').close()" data-i18n="close">Fermer</button>
+        </div>
+    </dialog>
 
     <!-- Notification Toast -->
     <div class="toast-container" id="toastContainer"></div>
@@ -619,6 +707,49 @@
             remote_nfs_options_hint: "Options de montage NFS (séparées par des virgules)",
             remote_s3_endpoint_hint: "AWS, MinIO, Wasabi, Backblaze B2...",
             remote_s3_prefix_hint: "Dossier virtuel dans le bucket",
+            // SSH Remote Machines
+            "ssh.title": "Machines distantes SSH",
+            "ssh.add": "Ajouter",
+            "ssh.add_title": "Ajouter une machine SSH",
+            "ssh.edit": "Modifier",
+            "ssh.delete": "Supprimer",
+            "ssh.label": "Label",
+            "ssh.host": "Hôte / IP",
+            "ssh.user": "Utilisateur",
+            "ssh.password": "Mot de passe",
+            "ssh.auth_method": "Authentification",
+            "ssh.auth_pass": "Mot de passe",
+            "ssh.auth_key": "Clé SSH",
+            "ssh.key_path": "Chemin de la clé SSH",
+            "ssh.test": "Tester la connexion",
+            "ssh.testing": "Test en cours...",
+            "ssh.connect_ok": "Connexion SSH réussie",
+            "ssh.connect_fail": "Échec de connexion",
+            "ssh.empty": "Aucune machine configurée. Cliquez sur \"Ajouter\" pour commencer.",
+            "ssh.checking": "Vérification...",
+            "ssh.service_active": "Service actif",
+            "ssh.service_inactive": "Service inactif",
+            "ssh.service": "Service",
+            "ssh.offline": "Hors ligne",
+            "ssh.online": "En ligne",
+            "ssh.logs": "Journaux",
+            "ssh.logs_title": "Journaux service Omada",
+            "ssh.logs_empty": "Aucune entrée dans le journal",
+            "ssh.open": "Ouvrir ↗",
+            "ssh.install": "Installer Omada",
+            "ssh.uninstall": "Désinstaller",
+            "ssh.update": "Mettre à jour",
+            "ssh.saved": "Machine sauvegardée",
+            "ssh.deleted": "Machine supprimée",
+            "ssh.fields_required": "Label, hôte et utilisateur sont obligatoires",
+            "ssh.confirm_delete": "Supprimer cette machine SSH ?",
+            "ssh.confirm_uninstall": "Désinstaller Omada Controller sur cette machine distante ?\n\nLe paquet omadac sera supprimé.",
+            "ssh.service_ok": "Action \"{0}\" exécutée avec succès",
+            "ssh.op_ok": "Opération terminée avec succès",
+            "ssh.op_fail": "L'opération a rencontré une erreur",
+            cancel: "Annuler",
+            save: "Enregistrer",
+            close: "Fermer",
         },
         en: {
             logout: "Logout",
@@ -762,6 +893,49 @@
             remote_nfs_options_hint: "NFS mount options (comma-separated)",
             remote_s3_endpoint_hint: "AWS, MinIO, Wasabi, Backblaze B2...",
             remote_s3_prefix_hint: "Virtual folder in the bucket",
+            // SSH Remote Machines
+            "ssh.title": "Remote SSH Machines",
+            "ssh.add": "Add",
+            "ssh.add_title": "Add SSH Machine",
+            "ssh.edit": "Edit",
+            "ssh.delete": "Remove",
+            "ssh.label": "Label",
+            "ssh.host": "Host / IP",
+            "ssh.user": "Username",
+            "ssh.password": "Password",
+            "ssh.auth_method": "Authentication",
+            "ssh.auth_pass": "Password",
+            "ssh.auth_key": "SSH Key",
+            "ssh.key_path": "SSH key path",
+            "ssh.test": "Test connection",
+            "ssh.testing": "Testing...",
+            "ssh.connect_ok": "SSH connection successful",
+            "ssh.connect_fail": "Connection failed",
+            "ssh.empty": "No machines configured. Click \"Add\" to get started.",
+            "ssh.checking": "Checking...",
+            "ssh.service_active": "Service active",
+            "ssh.service_inactive": "Service inactive",
+            "ssh.service": "Service",
+            "ssh.offline": "Offline",
+            "ssh.online": "Online",
+            "ssh.logs": "Logs",
+            "ssh.logs_title": "Omada service logs",
+            "ssh.logs_empty": "No journal entries found",
+            "ssh.open": "Open ↗",
+            "ssh.install": "Install Omada",
+            "ssh.uninstall": "Uninstall",
+            "ssh.update": "Update",
+            "ssh.saved": "Machine saved",
+            "ssh.deleted": "Machine removed",
+            "ssh.fields_required": "Label, host and username are required",
+            "ssh.confirm_delete": "Remove this SSH machine?",
+            "ssh.confirm_uninstall": "Uninstall Omada Controller on this remote machine?\n\nThe omadac package will be removed.",
+            "ssh.service_ok": "Action \"{0}\" executed successfully",
+            "ssh.op_ok": "Operation completed successfully",
+            "ssh.op_fail": "Operation encountered an error",
+            cancel: "Cancel",
+            save: "Save",
+            close: "Close",
         }
     };
 
@@ -1805,6 +1979,286 @@
     }
 
     // ===================================================================
+    // SSH Remote Machines
+    // ===================================================================
+    let sshEditId = null;
+    const sshPollTimers = {};
+
+    function escHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function loadSSHMachines() {
+        try {
+            const res = await fetch('/api/remote-ssh');
+            const list = await res.json();
+            renderSSHMachines(list);
+            list.forEach(m => refreshSSHStatus(m.id));
+        } catch (e) { /* ignore */ }
+    }
+
+    function renderSSHMachines(list) {
+        const container = document.getElementById('sshMachinesList');
+        if (!list || list.length === 0) {
+            container.innerHTML = `<div class="ssh-empty-state">${t('ssh.empty')}</div>`;
+            return;
+        }
+        container.innerHTML = list.map(m => buildSSHMachineHTML(m)).join('');
+    }
+
+    function buildSSHMachineHTML(m) {
+        return `
+        <div class="ssh-machine-item" id="ssh-item-${m.id}">
+            <div class="ssh-machine-header">
+                <span class="status-dot" id="ssh-dot-${m.id}"></span>
+                <span class="ssh-machine-label">${escHtml(m.label)}</span>
+                <span class="ssh-machine-host">${escHtml(m.host)}:${m.port}</span>
+                <div class="ssh-machine-ctrl">
+                    <button class="btn btn-sm btn-icon" onclick="showSSHMachineModal('${m.id}')" title="${t('ssh.edit')}">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M12.9 1.1a1.5 1.5 0 0 1 0 2.1L4.5 11.6l-3 .9.9-3L10.8 1.1a1.5 1.5 0 0 1 2.1 0z"/></svg>
+                    </button>
+                    <button class="btn btn-sm btn-icon" onclick="deleteSSHMachine('${m.id}')" title="${t('ssh.delete')}" style="color:var(--danger)">✕</button>
+                </div>
+            </div>
+            <div class="ssh-machine-info" id="ssh-info-${m.id}">
+                <span id="ssh-svc-${m.id}" style="color:var(--text-muted)">${t('ssh.checking')}</span>
+                <span id="ssh-ver-${m.id}" style="display:none;color:var(--text-secondary)"></span>
+            </div>
+            <div class="ssh-machine-actions">
+                <button class="btn btn-sm btn-outline" onclick="sshServiceAction('${m.id}','start')" data-i18n="start">${t('start')}</button>
+                <button class="btn btn-sm btn-outline" onclick="sshServiceAction('${m.id}','stop')" data-i18n="stop">${t('stop')}</button>
+                <button class="btn btn-sm btn-outline" onclick="sshServiceAction('${m.id}','restart')" data-i18n="restart">${t('restart')}</button>
+                <button class="btn btn-sm btn-outline" onclick="refreshSSHStatus('${m.id}')" data-i18n="refresh">${t('refresh')}</button>
+                <button class="btn btn-sm btn-outline" onclick="showSSHLogs('${m.id}')">${t('ssh.logs')}</button>
+                <a class="btn btn-sm btn-outline" href="https://${escHtml(m.host)}:30560" target="_blank" rel="noopener">${t('ssh.open')}</a>
+                <button class="btn btn-sm btn-success" id="ssh-btn-install-${m.id}" onclick="sshStartOp('${m.id}','install')" style="display:none">${t('ssh.install')}</button>
+                <button class="btn btn-sm btn-warning" id="ssh-btn-update-${m.id}" onclick="sshStartOp('${m.id}','update')" style="display:none">${t('ssh.update')}</button>
+                <button class="btn btn-sm btn-danger" id="ssh-btn-uninstall-${m.id}" onclick="sshConfirmUninstall('${m.id}')" style="display:none">${t('ssh.uninstall')}</button>
+            </div>
+            <div class="console-output" id="ssh-console-${m.id}" style="display:none"></div>
+        </div>`;
+    }
+
+    async function refreshSSHStatus(mid) {
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}/status`);
+            const data = await res.json();
+            const dot = document.getElementById(`ssh-dot-${mid}`);
+            const svcEl = document.getElementById(`ssh-svc-${mid}`);
+            const verEl = document.getElementById(`ssh-ver-${mid}`);
+            const btnInstall = document.getElementById(`ssh-btn-install-${mid}`);
+            const btnUninstall = document.getElementById(`ssh-btn-uninstall-${mid}`);
+            const btnUpdate = document.getElementById(`ssh-btn-update-${mid}`);
+            if (!dot) return;
+
+            if (!data.ssh_ok) {
+                dot.className = 'status-dot status-inactive';
+                if (svcEl) { svcEl.style.color = 'var(--danger)'; svcEl.textContent = `SSH: ${data.error || t('ssh.offline')}`; }
+                return;
+            }
+
+            dot.className = 'status-dot status-active';
+            if (svcEl) {
+                svcEl.style.color = '';
+                const s = data.service_status;
+                const dotHtml = `<span class="status-dot ${s === 'active' ? 'status-active' : 'status-inactive'}" style="width:8px;height:8px;display:inline-block;margin-right:4px;vertical-align:middle;"></span>`;
+                svcEl.innerHTML = dotHtml + (s === 'active' ? t('ssh.service_active') : t('ssh.service_inactive'));
+            }
+            if (verEl) {
+                if (data.omada_version) { verEl.textContent = `Omada v${data.omada_version}`; verEl.style.display = ''; }
+                else { verEl.style.display = 'none'; }
+            }
+            if (btnInstall) btnInstall.style.display = data.omada_installed ? 'none' : '';
+            if (btnUninstall) btnUninstall.style.display = data.omada_installed ? '' : 'none';
+            if (btnUpdate) btnUpdate.style.display = data.omada_installed ? '' : 'none';
+        } catch (e) { /* ignore */ }
+    }
+
+    async function sshServiceAction(mid, action) {
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}/service/${action}`, { method: 'POST' });
+            const data = await res.json();
+            showToast(data.success ? t('ssh.service_ok', action) : data.message, data.success ? 'success' : 'error');
+            setTimeout(() => refreshSSHStatus(mid), 2500);
+        } catch (e) { showToast(t('connection_error'), 'error'); }
+    }
+
+    async function showSSHLogs(mid) {
+        const modal = document.getElementById('sshLogsModal');
+        const logDiv = document.getElementById('sshLogsContent');
+        logDiv.innerHTML = `<span style="color:var(--text-muted)">${t('loading')}</span>`;
+        modal.showModal();
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}/logs`);
+            const data = await res.json();
+            if (data.success) {
+                if (!data.lines.length) {
+                    logDiv.innerHTML = `<span style="color:var(--text-muted)">${t('ssh.logs_empty')}</span>`;
+                } else {
+                    logDiv.innerHTML = data.lines.map(l => `<span class="console-line">${escHtml(l)}</span>`).join('\n');
+                    logDiv.scrollTop = logDiv.scrollHeight;
+                }
+            } else {
+                logDiv.innerHTML = `<span class="console-line error">${escHtml(data.message)}</span>`;
+            }
+        } catch (e) {
+            logDiv.innerHTML = `<span class="console-line error">${t('connection_error')}</span>`;
+        }
+    }
+
+    async function sshStartOp(mid, op) {
+        const consoleDiv = document.getElementById(`ssh-console-${mid}`);
+        if (!consoleDiv) return;
+        consoleDiv.style.display = '';
+        consoleDiv.innerHTML = '';
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}/${op}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.started) {
+                pollSSHLog(mid, op, 0);
+            } else {
+                showToast(data.message || t('in_progress'), 'warning');
+            }
+        } catch (e) { showToast(t('connection_error'), 'error'); }
+    }
+
+    function sshConfirmUninstall(mid) {
+        if (!confirm(t('ssh.confirm_uninstall'))) return;
+        sshStartOp(mid, 'uninstall');
+    }
+
+    function pollSSHLog(mid, op, offset) {
+        const timerKey = `${mid}:${op}`;
+        clearTimeout(sshPollTimers[timerKey]);
+        fetch(`/api/remote-ssh/${mid}/${op}/log?offset=${offset}`)
+            .then(r => r.json())
+            .then(data => {
+                const consoleDiv = document.getElementById(`ssh-console-${mid}`);
+                if (!consoleDiv) return;
+                (data.lines || []).forEach(line => {
+                    const span = document.createElement('span');
+                    span.className = 'console-line' + (line.startsWith('✓') ? ' success' : line.startsWith('✗') ? ' error' : '');
+                    span.textContent = line;
+                    consoleDiv.appendChild(span);
+                    consoleDiv.appendChild(document.createTextNode('\n'));
+                });
+                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+                if (data.running) {
+                    sshPollTimers[timerKey] = setTimeout(() => pollSSHLog(mid, op, data.total), 800);
+                } else {
+                    showToast(data.success ? t('ssh.op_ok') : t('ssh.op_fail'), data.success ? 'success' : 'error');
+                    setTimeout(() => refreshSSHStatus(mid), 1500);
+                }
+            })
+            .catch(() => { sshPollTimers[timerKey] = setTimeout(() => pollSSHLog(mid, op, offset), 2000); });
+    }
+
+    function toggleSSHAuthFields(auth) {
+        document.getElementById('sshPassGroup').style.display = auth === 'password' ? '' : 'none';
+        document.getElementById('sshKeyGroup').style.display = auth === 'key' ? '' : 'none';
+    }
+
+    function showSSHMachineModal(editId = null) {
+        sshEditId = editId;
+        const modal = document.getElementById('sshMachineModal');
+        const title = document.getElementById('sshModalTitle');
+        const testResult = document.getElementById('sshTestResult');
+        title.textContent = editId ? t('ssh.edit') : t('ssh.add_title');
+        testResult.style.display = 'none';
+        testResult.className = 'ssh-test-result';
+        if (editId) {
+            fetch('/api/remote-ssh')
+                .then(r => r.json())
+                .then(list => {
+                    const m = list.find(x => x.id === editId);
+                    if (!m) return;
+                    document.getElementById('sshFieldLabel').value = m.label;
+                    document.getElementById('sshFieldHost').value = m.host;
+                    document.getElementById('sshFieldPort').value = m.port;
+                    document.getElementById('sshFieldUser').value = m.username;
+                    document.getElementById('sshFieldPass').value = '';
+                    document.getElementById('sshFieldKeyPath').value = m.key_path || '';
+                    document.querySelectorAll('[name="sshAuth"]').forEach(r => { r.checked = r.value === m.auth; });
+                    toggleSSHAuthFields(m.auth);
+                });
+        } else {
+            document.getElementById('sshFieldLabel').value = '';
+            document.getElementById('sshFieldHost').value = '';
+            document.getElementById('sshFieldPort').value = '22';
+            document.getElementById('sshFieldUser').value = 'root';
+            document.getElementById('sshFieldPass').value = '';
+            document.getElementById('sshFieldKeyPath').value = '';
+            document.querySelector('[name="sshAuth"][value="password"]').checked = true;
+            toggleSSHAuthFields('password');
+        }
+        modal.showModal();
+    }
+
+    async function saveSSHMachine() {
+        const label = document.getElementById('sshFieldLabel').value.trim();
+        const host = document.getElementById('sshFieldHost').value.trim();
+        const port = parseInt(document.getElementById('sshFieldPort').value) || 22;
+        const username = document.getElementById('sshFieldUser').value.trim();
+        const auth = document.querySelector('[name="sshAuth"]:checked')?.value || 'password';
+        const password = document.getElementById('sshFieldPass').value;
+        const key_path = document.getElementById('sshFieldKeyPath').value.trim();
+        if (!label || !host || !username) { showToast(t('ssh.fields_required'), 'error'); return; }
+        const body = { label, host, port, username, auth, password, key_path };
+        const url = sshEditId ? `/api/remote-ssh/${sshEditId}` : '/api/remote-ssh';
+        const method = sshEditId ? 'PUT' : 'POST';
+        try {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('sshMachineModal').close();
+                showToast(t('ssh.saved'), 'success');
+                await loadSSHMachines();
+                const mid = data.machine?.id || sshEditId;
+                if (mid) setTimeout(() => refreshSSHStatus(mid), 500);
+            } else { showToast(data.message, 'error'); }
+        } catch (e) { showToast(t('connection_error'), 'error'); }
+    }
+
+    async function deleteSSHMachine(mid) {
+        if (!confirm(t('ssh.confirm_delete'))) return;
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) { showToast(t('ssh.deleted'), 'success'); loadSSHMachines(); }
+            else { showToast(data.message, 'error'); }
+        } catch (e) { showToast(t('connection_error'), 'error'); }
+    }
+
+    async function testSSHConnection() {
+        const resultEl = document.getElementById('sshTestResult');
+        resultEl.style.display = '';
+        resultEl.className = 'ssh-test-result';
+        resultEl.textContent = t('ssh.testing');
+        const host = document.getElementById('sshFieldHost').value.trim();
+        const port = parseInt(document.getElementById('sshFieldPort').value) || 22;
+        const username = document.getElementById('sshFieldUser').value.trim();
+        const auth = document.querySelector('[name="sshAuth"]:checked')?.value || 'password';
+        const password = document.getElementById('sshFieldPass').value;
+        const key_path = document.getElementById('sshFieldKeyPath').value.trim();
+        const mid = sshEditId || 'new';
+        try {
+            const res = await fetch(`/api/remote-ssh/${mid}/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host, port, username, auth, password, key_path })
+            });
+            const data = await res.json();
+            resultEl.className = 'ssh-test-result ' + (data.success ? 'ok' : 'fail');
+            resultEl.textContent = data.success ? t('ssh.connect_ok') : data.message;
+        } catch (e) {
+            resultEl.className = 'ssh-test-result fail';
+            resultEl.textContent = t('connection_error');
+        }
+    }
+
+    // ===================================================================
     // Init
     // ===================================================================
     document.addEventListener('DOMContentLoaded', () => {
@@ -1820,10 +2274,15 @@
         loadManagerVersion();
         checkManagerUpdate();
         initSocket();
+        loadSSHMachines();
 
         statusInterval = setInterval(() => {
             checkOmadaInstalled(); // also calls refreshStatus() once done
             loadSystemStats();
+            // Refresh SSH statuses silently
+            fetch('/api/remote-ssh').then(r => r.json()).then(list => {
+                list.forEach(m => refreshSSHStatus(m.id));
+            }).catch(() => {});
         }, 10000);
     });
     </script>

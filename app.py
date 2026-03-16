@@ -17,7 +17,10 @@ import threading
 import tempfile
 import urllib.request
 import urllib.error
+import uuid as _uuid_mod
 from datetime import datetime
+
+import paramiko
 
 from flask import (
     Flask, render_template, request, session, redirect,
@@ -1698,6 +1701,368 @@ def _test_s3(cfg):
     if result.returncode == 0:
         return {"success": True, "message": f"S3 connection to {bucket} successful"}
     return {"success": False, "message": f"S3 error: {result.stderr.strip()}"}
+
+
+# ---------------------------------------------------------------------------
+# Remote SSH Machines
+# ---------------------------------------------------------------------------
+
+SSH_CONFIG_FILE = os.path.join(BASE_DIR, "remote_ssh.json")
+_remote_jobs: dict = {}
+_remote_jobs_lock = threading.Lock()
+
+
+def _load_ssh_machines() -> list:
+    try:
+        with open(SSH_CONFIG_FILE, "r") as f:
+            return json.load(f).get("machines", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_ssh_machines(machines: list):
+    with open(SSH_CONFIG_FILE, "w") as f:
+        json.dump({"machines": machines}, f, indent=2)
+    os.chmod(SSH_CONFIG_FILE, 0o600)
+
+
+def _mask_machine(m: dict) -> dict:
+    mc = dict(m)
+    if mc.get("password"):
+        mc["password"] = "***"
+    return mc
+
+
+def _ssh_connect(machine: dict) -> paramiko.SSHClient:
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kw = dict(
+        hostname=machine["host"],
+        port=int(machine.get("port", 22)),
+        username=machine["username"],
+        timeout=15,
+        auth_timeout=15,
+        look_for_keys=False,
+        allow_agent=False,
+    )
+    if machine.get("auth") == "key" and machine.get("key_path"):
+        kw["key_filename"] = machine["key_path"]
+    else:
+        kw["password"] = machine.get("password", "")
+    client.connect(**kw)
+    return client
+
+
+def _ssh_exec(machine: dict, command: str, timeout: int = 30):
+    """Run a command via SSH. Returns (stdout, stderr, exit_code)."""
+    client = _ssh_connect(machine)
+    try:
+        _, stdout, stderr = client.exec_command(command, timeout=timeout, get_pty=False)
+        exit_code = stdout.channel.recv_exit_status()
+        return (
+            stdout.read().decode("utf-8", errors="replace"),
+            stderr.read().decode("utf-8", errors="replace"),
+            exit_code,
+        )
+    finally:
+        client.close()
+
+
+def _remote_add_log(job_id: str, line: str):
+    with _remote_jobs_lock:
+        if job_id in _remote_jobs:
+            _remote_jobs[job_id]["logs"].append(line)
+
+
+def _get_remote_job(job_id: str) -> dict:
+    with _remote_jobs_lock:
+        j = _remote_jobs.get(job_id)
+        if not j:
+            return {"running": False, "logs": [], "success": None}
+        return {"running": j["running"], "logs": list(j["logs"]), "success": j["success"]}
+
+
+def _remote_finish_job(job_id: str, success: bool):
+    with _remote_jobs_lock:
+        if job_id in _remote_jobs:
+            _remote_jobs[job_id]["running"] = False
+            _remote_jobs[job_id]["success"] = success
+
+
+def _stream_remote_cmd(machine: dict, job_id: str, command: str, timeout: int = 600):
+    """Run command on remote via PTY and stream output line by line to job log."""
+    client = _ssh_connect(machine)
+    try:
+        _, stdout, _ = client.exec_command(command, timeout=timeout, get_pty=True)
+        for raw_line in iter(stdout.readline, ""):
+            stripped = raw_line.rstrip("\r\n")
+            if stripped:
+                _remote_add_log(job_id, stripped)
+        return stdout.channel.recv_exit_status()
+    finally:
+        client.close()
+
+
+def _run_remote_install(machine: dict, job_id: str):
+    try:
+        _remote_add_log(job_id, "→ Connecting to remote machine…")
+        _ssh_exec(machine, "echo ok", timeout=15)
+        _remote_add_log(job_id, "→ Downloading and running install script (may take several minutes)…")
+        install_cmd = (
+            "curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/"
+            "install_omada_manager.sh | sudo bash 2>&1"
+        )
+        exit_code = _stream_remote_cmd(machine, job_id, install_cmd, timeout=900)
+        if exit_code != 0:
+            raise RuntimeError(f"Install script exited with code {exit_code}")
+        _remote_add_log(job_id, "✓ Omada Controller installed successfully.")
+        _remote_finish_job(job_id, True)
+    except Exception as exc:
+        _remote_add_log(job_id, f"✗ Error: {exc}")
+        _remote_finish_job(job_id, False)
+
+
+def _run_remote_uninstall(machine: dict, job_id: str):
+    try:
+        _remote_add_log(job_id, "→ Stopping Omada service…")
+        _ssh_exec(machine, "sudo systemctl stop tpeap 2>/dev/null || true", timeout=30)
+        _remote_add_log(job_id, "→ Removing omadac package…")
+        out, err, _ = _ssh_exec(machine, "sudo apt-get remove -y omadac 2>&1", timeout=120)
+        for line in (out + err).splitlines():
+            if line.strip():
+                _remote_add_log(job_id, line)
+        _remote_add_log(job_id, "→ Cleaning residual files…")
+        _ssh_exec(machine, "sudo rm -rf /opt/tplink 2>/dev/null || true", timeout=30)
+        _remote_add_log(job_id, "✓ Omada Controller uninstalled successfully.")
+        _remote_finish_job(job_id, True)
+    except Exception as exc:
+        _remote_add_log(job_id, f"✗ Error: {exc}")
+        _remote_finish_job(job_id, False)
+
+
+def _run_remote_update(machine: dict, job_id: str):
+    """Re-run the install script — idempotent upgrade."""
+    _run_remote_install(machine, job_id)
+
+
+def _get_machine_or_404(mid: str):
+    return next((m for m in _load_ssh_machines() if m["id"] == mid), None)
+
+
+@app.route("/api/remote-ssh", methods=["GET"])
+@login_required
+def api_remote_ssh_list():
+    return jsonify([_mask_machine(m) for m in _load_ssh_machines()])
+
+
+@app.route("/api/remote-ssh", methods=["POST"])
+@login_required
+def api_remote_ssh_add():
+    data = request.json or {}
+    for field in ("label", "host", "username"):
+        if not data.get(field):
+            return jsonify({"success": False, "message": f"Field '{field}' is required"}), 400
+    machine = {
+        "id": str(_uuid_mod.uuid4()),
+        "label": data["label"].strip(),
+        "host": data["host"].strip(),
+        "port": int(data.get("port", 22)),
+        "username": data["username"].strip(),
+        "auth": data.get("auth", "password"),
+        "password": data.get("password", ""),
+        "key_path": data.get("key_path", ""),
+    }
+    machines = _load_ssh_machines()
+    machines.append(machine)
+    _save_ssh_machines(machines)
+    return jsonify({"success": True, "machine": _mask_machine(machine)})
+
+
+@app.route("/api/remote-ssh/<mid>", methods=["PUT"])
+@login_required
+def api_remote_ssh_update_machine(mid):
+    data = request.json or {}
+    machines = _load_ssh_machines()
+    machine = next((m for m in machines if m["id"] == mid), None)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    for field in ("label", "host", "username", "auth", "key_path"):
+        if field in data:
+            machine[field] = str(data[field]).strip()
+    if "port" in data:
+        machine["port"] = int(data["port"])
+    if "password" in data and data["password"] != "***":
+        machine["password"] = data["password"]
+    _save_ssh_machines(machines)
+    return jsonify({"success": True, "machine": _mask_machine(machine)})
+
+
+@app.route("/api/remote-ssh/<mid>", methods=["DELETE"])
+@login_required
+def api_remote_ssh_delete(mid):
+    machines = _load_ssh_machines()
+    new_list = [m for m in machines if m["id"] != mid]
+    if len(new_list) == len(machines):
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    _save_ssh_machines(new_list)
+    return jsonify({"success": True})
+
+
+@app.route("/api/remote-ssh/<mid>/test", methods=["POST"])
+@login_required
+def api_remote_ssh_test(mid):
+    data = request.json or {}
+    if mid == "new":
+        machine = data
+    else:
+        machine = _get_machine_or_404(mid)
+        if not machine:
+            return jsonify({"success": False, "message": "Machine not found"}), 404
+        if data.get("password") and data["password"] != "***":
+            machine = dict(machine)
+            machine["password"] = data["password"]
+    try:
+        _ssh_exec(machine, "echo ok", timeout=15)
+        return jsonify({"success": True, "message": "Connection successful"})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)})
+
+
+@app.route("/api/remote-ssh/<mid>/status", methods=["GET"])
+@login_required
+def api_remote_ssh_status(mid):
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    try:
+        out, _, _ = _ssh_exec(machine, "systemctl is-active tpeap 2>/dev/null; true", timeout=10)
+        service_status = out.strip()
+        props = "/opt/tplink/EAPController/properties/omada.properties"
+        out2, _, _ = _ssh_exec(machine, f"test -f '{props}' && echo yes || echo no", timeout=10)
+        omada_installed = out2.strip() == "yes"
+        omada_version = None
+        if omada_installed:
+            out3, _, _ = _ssh_exec(
+                machine,
+                f"grep '^app.version=' '{props}' 2>/dev/null | cut -d= -f2",
+                timeout=10,
+            )
+            omada_version = out3.strip() or None
+        return jsonify({
+            "success": True, "ssh_ok": True,
+            "service_status": service_status,
+            "omada_installed": omada_installed,
+            "omada_version": omada_version,
+        })
+    except Exception as exc:
+        return jsonify({
+            "success": True, "ssh_ok": False, "error": str(exc),
+            "service_status": None, "omada_installed": False, "omada_version": None,
+        })
+
+
+@app.route("/api/remote-ssh/<mid>/service/<action>", methods=["POST"])
+@login_required
+def api_remote_ssh_service(mid, action):
+    if action not in ("start", "stop", "restart"):
+        return jsonify({"success": False, "message": "Invalid action"}), 400
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    try:
+        out, err, code = _ssh_exec(machine, f"sudo systemctl {action} tpeap 2>&1", timeout=30)
+        if code == 0:
+            return jsonify({"success": True, "message": f"Service {action} successful"})
+        return jsonify({"success": False, "message": (err + out).strip()})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)})
+
+
+@app.route("/api/remote-ssh/<mid>/logs", methods=["GET"])
+@login_required
+def api_remote_ssh_logs(mid):
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    try:
+        n = int(request.args.get("lines", 80))
+        out, err, _ = _ssh_exec(
+            machine,
+            f"sudo journalctl -u tpeap -n {n} --no-pager --output=short 2>&1",
+            timeout=20,
+        )
+        return jsonify({"success": True, "lines": (out + err).splitlines()})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)})
+
+
+def _start_remote_job(mid: str, op: str, target_fn, machine: dict):
+    job_id = f"{mid}:{op}"
+    with _remote_jobs_lock:
+        if _remote_jobs.get(job_id, {}).get("running"):
+            return False
+        _remote_jobs[job_id] = {"running": True, "logs": [], "success": None}
+    threading.Thread(target=target_fn, args=(machine, job_id), daemon=True).start()
+    return True
+
+
+def _log_response(mid: str, op: str):
+    job_id = f"{mid}:{op}"
+    offset = int(request.args.get("offset", 0))
+    job = _get_remote_job(job_id)
+    logs = job.get("logs", [])
+    return jsonify({
+        "lines": logs[offset:], "total": len(logs),
+        "running": job.get("running", False), "success": job.get("success"),
+    })
+
+
+@app.route("/api/remote-ssh/<mid>/install", methods=["POST"])
+@login_required
+def api_remote_ssh_install(mid):
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    started = _start_remote_job(mid, "install", _run_remote_install, machine)
+    return jsonify({"started": started})
+
+
+@app.route("/api/remote-ssh/<mid>/install/log", methods=["GET"])
+@login_required
+def api_remote_ssh_install_log(mid):
+    return _log_response(mid, "install")
+
+
+@app.route("/api/remote-ssh/<mid>/uninstall", methods=["POST"])
+@login_required
+def api_remote_ssh_uninstall(mid):
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    started = _start_remote_job(mid, "uninstall", _run_remote_uninstall, machine)
+    return jsonify({"started": started})
+
+
+@app.route("/api/remote-ssh/<mid>/uninstall/log", methods=["GET"])
+@login_required
+def api_remote_ssh_uninstall_log(mid):
+    return _log_response(mid, "uninstall")
+
+
+@app.route("/api/remote-ssh/<mid>/update", methods=["POST"])
+@login_required
+def api_remote_ssh_update_omada(mid):
+    machine = _get_machine_or_404(mid)
+    if not machine:
+        return jsonify({"success": False, "message": "Machine not found"}), 404
+    started = _start_remote_job(mid, "update", _run_remote_update, machine)
+    return jsonify({"started": started})
+
+
+@app.route("/api/remote-ssh/<mid>/update/log", methods=["GET"])
+@login_required
+def api_remote_ssh_update_log(mid):
+    return _log_response(mid, "update")
 
 
 # ---------------------------------------------------------------------------

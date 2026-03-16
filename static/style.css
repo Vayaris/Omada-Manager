@@ -1428,3 +1428,184 @@ body {
         gap: 10px;
     }
 }
+
+/* ===================================================================
+   Remote SSH Machines
+   =================================================================== */
+#remoteSSHCard {
+    grid-column: 1 / -1;
+}
+
+.ssh-machine-item {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 0;
+}
+
+.ssh-machine-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.ssh-machine-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ssh-machine-label {
+    font-weight: 600;
+    font-size: 15px;
+    flex: 1;
+    min-width: 0;
+}
+
+.ssh-machine-host {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.ssh-machine-ctrl {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.ssh-machine-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.ssh-machine-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.ssh-empty-state {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+/* Console output for install/uninstall/update streaming */
+.console-output {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: #7dcfff;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 10px;
+}
+
+.console-line { display: block; }
+.console-line.success { color: #9ece6a; }
+.console-line.error   { color: #f7768e; }
+
+/* SSH Machine Modal (native <dialog>) */
+#sshMachineModal {
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    min-width: 420px;
+    max-width: 520px;
+    width: 90vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+#sshMachineModal::backdrop {
+    background: rgba(0,0,0,0.5);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.modal-body {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+}
+
+.ssh-test-result {
+    margin-top: 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.ssh-test-result.ok {
+    background: rgba(158, 206, 106, 0.1);
+    color: var(--success);
+    border: 1px solid rgba(158, 206, 106, 0.25);
+}
+
+.ssh-test-result.fail {
+    background: rgba(247, 118, 142, 0.1);
+    color: var(--danger);
+    border: 1px solid rgba(247, 118, 142, 0.25);
+}
+
+/* SSH Logs Modal */
+#sshLogsModal {
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    width: min(800px, 92vw);
+    max-height: 80vh;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+}
+
+#sshLogsModal::backdrop {
+    background: rgba(0,0,0,0.5);
+}
+
+#sshLogsModal .modal-body {
+    overflow-y: auto;
+    flex: 1;
+}
+
+#sshLogsModal .console-output {
+    max-height: none;
+}
