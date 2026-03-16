@@ -17,6 +17,7 @@ import threading
 import tempfile
 import urllib.request
 import urllib.error
+import shlex
 import uuid as _uuid_mod
 from datetime import datetime
 
@@ -1808,9 +1809,10 @@ def _run_remote_install(machine: dict, job_id: str):
         _remote_add_log(job_id, "→ Connecting to remote machine…")
         _ssh_exec(machine, "echo ok", timeout=15)
         _remote_add_log(job_id, "→ Downloading and running install script (may take several minutes)…")
-        install_cmd = (
-            "curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/"
-            "install_omada_manager.sh | sudo bash 2>&1"
+        install_cmd = _sudo(
+            machine,
+            "bash -c 'curl -fsSL https://raw.githubusercontent.com/Vayaris/Omada-Manager/main/"
+            "install_omada_manager.sh | bash' 2>&1",
         )
         exit_code = _stream_remote_cmd(machine, job_id, install_cmd, timeout=900)
         if exit_code != 0:
@@ -1825,14 +1827,14 @@ def _run_remote_install(machine: dict, job_id: str):
 def _run_remote_uninstall(machine: dict, job_id: str):
     try:
         _remote_add_log(job_id, "→ Stopping Omada service…")
-        _ssh_exec(machine, "sudo systemctl stop tpeap 2>/dev/null || true", timeout=30)
+        _ssh_exec(machine, _sudo(machine, "systemctl stop tpeap 2>/dev/null || true"), timeout=30)
         _remote_add_log(job_id, "→ Removing omadac package…")
-        out, err, _ = _ssh_exec(machine, "sudo apt-get remove -y omadac 2>&1", timeout=120)
+        out, err, _ = _ssh_exec(machine, _sudo(machine, "apt-get remove -y omadac 2>&1"), timeout=120)
         for line in (out + err).splitlines():
             if line.strip():
                 _remote_add_log(job_id, line)
         _remote_add_log(job_id, "→ Cleaning residual files…")
-        _ssh_exec(machine, "sudo rm -rf /opt/tplink 2>/dev/null || true", timeout=30)
+        _ssh_exec(machine, _sudo(machine, "rm -rf /opt/tplink 2>/dev/null || true"), timeout=30)
         _remote_add_log(job_id, "✓ Omada Controller uninstalled successfully.")
         _remote_finish_job(job_id, True)
     except Exception as exc:
@@ -1843,6 +1845,13 @@ def _run_remote_uninstall(machine: dict, job_id: str):
 def _run_remote_update(machine: dict, job_id: str):
     """Re-run the install script — idempotent upgrade."""
     _run_remote_install(machine, job_id)
+
+
+def _sudo(machine: dict, cmd: str) -> str:
+    """Return a shell command that runs `cmd` via sudo, feeding the password through
+    stdin with `sudo -S` to avoid the 'terminal required' error over SSH."""
+    pwd = shlex.quote(machine.get("password", ""))
+    return f"echo {pwd} | sudo -S {cmd}"
 
 
 def _get_machine_or_404(mid: str):
@@ -1970,7 +1979,7 @@ def api_remote_ssh_service(mid, action):
     if not machine:
         return jsonify({"success": False, "message": "Machine not found"}), 404
     try:
-        out, err, code = _ssh_exec(machine, f"sudo systemctl {action} tpeap 2>&1", timeout=30)
+        out, err, code = _ssh_exec(machine, _sudo(machine, f"systemctl {action} tpeap 2>&1"), timeout=30)
         if code == 0:
             return jsonify({"success": True, "message": f"Service {action} successful"})
         return jsonify({"success": False, "message": (err + out).strip()})
@@ -1988,7 +1997,7 @@ def api_remote_ssh_logs(mid):
         n = int(request.args.get("lines", 80))
         out, err, _ = _ssh_exec(
             machine,
-            f"sudo journalctl -u tpeap -n {n} --no-pager --output=short 2>&1",
+            _sudo(machine, f"journalctl -u tpeap -n {n} --no-pager --output=short 2>&1"),
             timeout=20,
         )
         return jsonify({"success": True, "lines": (out + err).splitlines()})
